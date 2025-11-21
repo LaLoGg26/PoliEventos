@@ -1,0 +1,39 @@
+# ===============================================
+# IGNORAR ARCHIVOS Y CARPETAS GENERALES DE NODE.JS
+# ===============================================
+
+# Carpeta de dependencias generadas: ¡La más importante!
+node_modules/
+
+# Archivos de logs de NPM
+npm-debug.log
+yarn-error.log
+.yarn-integrity
+
+# ===============================================
+# IGNORAR ARCHIVOS SENSIBLES (CREDENTIALS)
+# ===============================================
+
+# Variables de entorno. Esto contiene las claves y contraseñas.
+# ¡Es vital que NUNCA subas este archivo!
+.env
+.env.local
+.env.development
+.env.production
+
+# ===============================================
+# CONFIGURACIÓN ESPECÍFICA DEL BACKEND (Node.js/Express)
+# ===============================================
+
+# Ignorar archivos temporales o de configuración específicos del SO
+*.log
+.DS_Store
+
+# ===============================================
+# CONFIGURACIÓN ESPECÍFICA DEL FRONTEND (React)
+# ===============================================
+
+# Carpetas de compilación y caché de React/Webpack/Vite
+build/
+dist/
+.vite/
