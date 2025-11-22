@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const eventoController = require("../controllers/evento.controller");
+const upload = require("../config/cloudinary.config");
 // ⭐️ IMPORTAMOS los middlewares de protección ⭐️
 const {
   protect,
@@ -28,6 +29,12 @@ router.post("/comprar", eventoController.postComprarBoletos);
 // Requiere:
 // 1. estar logueado (protect)
 // 2. ser VENDEDOR o SUPER_USER Y tener suscripción activa (checkSubscription)
-router.post("/", protect, checkSubscription, eventoController.postCreateEvento);
+router.post(
+  "/",
+  protect,
+  checkSubscription,
+  upload.single("imagen"),
+  eventoController.postCreateEvento
+);
 
 module.exports = router;

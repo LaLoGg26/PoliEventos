@@ -18,7 +18,7 @@ async function findAll() {
 async function findById(eventoId) {
   const query = `
         SELECT 
-            e.id, e.nombre, e.descripcion, e.fecha, e.lugar, e.imagen_url,
+            e.id, e.nombre, e.descripcion, e.fecha, e.lugar, e.imagen_url, e.latitud, e.longitud,
             JSON_ARRAYAGG(
                 JSON_OBJECT(
                     'id', b.id, 
@@ -95,7 +95,9 @@ async function createEvento(
   lugar,
   imagen_url,
   usuario_id,
-  tiposBoletos
+  tiposBoletos,
+  latitud,
+  longitud
 ) {
   const connection = await pool.getConnection();
   try {
@@ -103,8 +105,8 @@ async function createEvento(
 
     // A. Insertar el Evento
     const queryEvento = `
-            INSERT INTO eventos (nombre, descripcion, fecha, lugar, imagen_url, usuario_id) 
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO eventos (nombre, descripcion, fecha, lugar, imagen_url, usuario_id, latitud, longitud) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `;
     const [resultEvento] = await connection.query(queryEvento, [
       nombre,
@@ -113,6 +115,8 @@ async function createEvento(
       lugar,
       imagen_url,
       usuario_id,
+      latitud,
+      longitud,
     ]);
     const eventoId = resultEvento.insertId;
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import LocationPicker from "../components/LocationPicker";
 
 const API_URL = "http://localhost:3001/api/eventos";
 
@@ -8,16 +9,17 @@ function CreateEventPage() {
   const { user, token } = useAuth();
   const navigate = useNavigate();
 
-  // 1. Datos del Evento
+  // Datos del formulario
   const [formData, setFormData] = useState({
     nombre: "",
     descripcion: "",
     fecha: "",
     lugar: "",
-    imagen_url: "",
   });
 
-  // 2. Datos de los Boletos (Array dinámico)
+  const [imagenFile, setImagenFile] = useState(null);
+  const [coords, setCoords] = useState(null);
+
   const [tiposBoletos, setTiposBoletos] = useState([
     { nombre_zona: "General", precio: "", cantidad_total: "" },
   ]);
@@ -25,35 +27,31 @@ function CreateEventPage() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // ⭐️ NUEVOS ESTADOS PARA EL MODAL DE ÉXITO ⭐️
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [createdEventId, setCreatedEventId] = useState(null);
+
   useEffect(() => {
     if (!user) return navigate("/login");
     if (user.rol !== "VENDEDOR" && user.rol !== "SUPER_USER") navigate("/");
   }, [user, navigate]);
 
-  // Manejo de cambios inputs del evento
-  const handleChange = (e) => {
+  const handleChange = (e) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
 
-  // Manejo de cambios inputs de boletos (por índice)
   const handleBoletoChange = (index, e) => {
-    const nuevosBoletos = [...tiposBoletos];
-    nuevosBoletos[index][e.target.name] = e.target.value;
-    setTiposBoletos(nuevosBoletos);
+    const nuevos = [...tiposBoletos];
+    nuevos[index][e.target.name] = e.target.value;
+    setTiposBoletos(nuevos);
   };
-
-  // Agregar fila de boleto
-  const agregarTipoBoleto = () => {
+  const agregarTipoBoleto = () =>
     setTiposBoletos([
       ...tiposBoletos,
       { nombre_zona: "", precio: "", cantidad_total: "" },
     ]);
-  };
-
-  // Eliminar fila de boleto
   const eliminarTipoBoleto = (index) => {
-    const nuevosBoletos = tiposBoletos.filter((_, i) => i !== index);
-    setTiposBoletos(nuevosBoletos);
+    const nuevos = tiposBoletos.filter((_, i) => i !== index);
+    setTiposBoletos(nuevos);
   };
 
   const handleSubmit = async (e) => {
@@ -61,31 +59,37 @@ function CreateEventPage() {
     setLoading(true);
     setError(null);
 
-    // Construir el payload con los tipos de datos correctos
-    const payload = {
-      ...formData,
-      tiposBoletos: tiposBoletos.map((b) => ({
-        ...b,
-        precio: parseFloat(b.precio),
-        cantidad_total: parseInt(b.cantidad_total),
-      })),
-    };
+    const data = new FormData();
+    data.append("nombre", formData.nombre);
+    data.append("descripcion", formData.descripcion);
+    data.append("fecha", formData.fecha);
+    data.append("lugar", formData.lugar);
+    if (imagenFile) data.append("imagen", imagenFile);
+    if (coords) {
+      data.append("latitud", coords.lat);
+      data.append("longitud", coords.lng);
+    }
+
+    const boletosProcesados = tiposBoletos.map((b) => ({
+      ...b,
+      precio: parseFloat(b.precio),
+      cantidad_total: parseInt(b.cantidad_total),
+    }));
+    data.append("tiposBoletos", JSON.stringify(boletosProcesados));
 
     try {
       const response = await fetch(API_URL, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
+        headers: { Authorization: `Bearer ${token}` },
+        body: data,
       });
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message);
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message);
 
-      alert("¡Evento creado exitosamente!");
-      navigate("/");
+      // ⭐️ ÉXITO: Guardamos el ID y mostramos el Modal ⭐️
+      setCreatedEventId(result.evento.id);
+      setShowSuccessModal(true);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -95,128 +99,161 @@ function CreateEventPage() {
 
   return (
     <div style={styles.container}>
-      <div style={styles.card}>
-        <h2 style={styles.title}>📢 Publicar Nuevo Evento</h2>
-        {error && <p style={styles.error}>{error}</p>}
+      {/* ⭐️ MODAL DE ÉXITO ⭐️ */}
+      {showSuccessModal && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalCard}>
+            <div style={styles.iconWrapper}>🎉</div>
+            <h2 style={styles.modalTitle}>¡Evento Publicado!</h2>
+            <p style={styles.modalText}>
+              Tu evento <strong>"{formData.nombre}"</strong> ya está disponible
+              para la venta.
+            </p>
 
-        <form onSubmit={handleSubmit} style={styles.form}>
-          {/* SECCIÓN 1: DATOS DEL EVENTO */}
-          <h3 style={styles.subtitle}>Detalles del Evento</h3>
-
-          <input
-            name="nombre"
-            type="text"
-            value={formData.nombre}
-            onChange={handleChange}
-            required
-            style={styles.input}
-            placeholder="Nombre del Evento"
-          />
-          <textarea
-            name="descripcion"
-            value={formData.descripcion}
-            onChange={handleChange}
-            rows="2"
-            style={{ ...styles.input, fontFamily: "inherit" }}
-            placeholder="Descripción..."
-          />
-          <input
-            name="lugar"
-            type="text"
-            value={formData.lugar}
-            onChange={handleChange}
-            required
-            style={styles.input}
-            placeholder="Lugar / Sede"
-          />
-          <input
-            name="fecha"
-            type="datetime-local"
-            value={formData.fecha}
-            onChange={handleChange}
-            required
-            style={styles.input}
-          />
-          <input
-            name="imagen_url"
-            type="text"
-            value={formData.imagen_url}
-            onChange={handleChange}
-            style={styles.input}
-            placeholder="URL de Imagen (opcional)"
-          />
-
-          {/* SECCIÓN 2: TIPOS DE BOLETOS */}
-          <h3 style={styles.subtitle}>Tipos de Boletos</h3>
-          <p
-            style={{ fontSize: "0.8rem", color: "#666", marginBottom: "10px" }}
-          >
-            Define las zonas y precios (Ej. VIP, General).
-          </p>
-
-          {tiposBoletos.map((boleto, index) => (
-            <div key={index} style={styles.boletoRow}>
-              <input
-                name="nombre_zona"
-                placeholder="Nombre Zona (Ej. VIP)"
-                value={boleto.nombre_zona}
-                onChange={(e) => handleBoletoChange(index, e)}
-                required
-                style={{ ...styles.input, flex: 2 }}
-              />
-              <input
-                name="precio"
-                type="number"
-                placeholder="Precio ($)"
-                value={boleto.precio}
-                onChange={(e) => handleBoletoChange(index, e)}
-                required
-                style={{ ...styles.input, flex: 1 }}
-              />
-              <input
-                name="cantidad_total"
-                type="number"
-                placeholder="Cantidad"
-                value={boleto.cantidad_total}
-                onChange={(e) => handleBoletoChange(index, e)}
-                required
-                style={{ ...styles.input, flex: 1 }}
-              />
-
-              {/* Botón eliminar (solo si hay más de 1) */}
-              {tiposBoletos.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => eliminarTipoBoleto(index)}
-                  style={styles.deleteButton}
-                >
-                  ✕
-                </button>
-              )}
+            <div style={styles.modalActions}>
+              <Link to={`/evento/${createdEventId}`} style={styles.primaryBtn}>
+                Ver Evento Creado
+              </Link>
+              <button onClick={() => navigate("/")} style={styles.secondaryBtn}>
+                Volver al Inicio
+              </button>
             </div>
-          ))}
+          </div>
+        </div>
+      )}
 
-          <button
-            type="button"
-            onClick={agregarTipoBoleto}
-            style={styles.addButton}
-          >
-            + Agregar otro tipo de boleto
-          </button>
+      <form onSubmit={handleSubmit} style={styles.formWrapper}>
+        <div style={styles.header}>
+          <h2 style={styles.title}>📢 Publicar Nuevo Evento</h2>
+        </div>
 
-          <hr
-            style={{
-              margin: "20px 0",
-              border: "0",
-              borderTop: "1px solid #eee",
-            }}
-          />
+        {error && <div style={styles.errorAlert}>{error}</div>}
 
+        <section style={styles.section}>
+          <h3 style={styles.sectionTitle}>1. Información General</h3>
+          <div style={styles.grid}>
+            <div style={styles.inputGroup}>
+              <label style={styles.label}>Nombre del Evento</label>
+              <input
+                name="nombre"
+                value={formData.nombre}
+                onChange={handleChange}
+                required
+                style={styles.input}
+              />
+            </div>
+            <div style={styles.inputGroup}>
+              <label style={styles.label}>Fecha y Hora</label>
+              <input
+                name="fecha"
+                type="datetime-local"
+                value={formData.fecha}
+                onChange={handleChange}
+                required
+                style={styles.input}
+              />
+            </div>
+            <div style={styles.inputGroup}>
+              <label style={styles.label}>Nombre del Lugar</label>
+              <input
+                name="lugar"
+                value={formData.lugar}
+                onChange={handleChange}
+                required
+                style={styles.input}
+                placeholder="Ej. Palacio de los Deportes"
+              />
+            </div>
+            <div style={styles.inputGroup}>
+              <label style={styles.label}>Imagen de Portada</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setImagenFile(e.target.files[0])}
+                style={{ ...styles.input, padding: "7px" }}
+              />
+            </div>
+            <div style={{ ...styles.inputGroup, gridColumn: "1 / -1" }}>
+              <label style={styles.label}>Descripción</label>
+              <textarea
+                name="descripcion"
+                value={formData.descripcion}
+                onChange={handleChange}
+                rows="3"
+                style={styles.textarea}
+              />
+            </div>
+            <div style={{ ...styles.inputGroup, gridColumn: "1 / -1" }}>
+              <label style={styles.label}>
+                Ubicación Exacta (Haz clic en el mapa)
+              </label>
+              <LocationPicker onLocationSelect={setCoords} />
+            </div>
+          </div>
+        </section>
+
+        <section style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <h3 style={styles.sectionTitle}>2. Tickets y Precios</h3>
+            <button
+              type="button"
+              onClick={agregarTipoBoleto}
+              style={styles.addButton}
+            >
+              + Agregar Zona
+            </button>
+          </div>
+          <div style={styles.ticketsContainer}>
+            {tiposBoletos.map((boleto, index) => (
+              <div key={index} style={styles.ticketCard}>
+                <div style={styles.ticketGrid}>
+                  <input
+                    name="nombre_zona"
+                    placeholder="Zona"
+                    value={boleto.nombre_zona}
+                    onChange={(e) => handleBoletoChange(index, e)}
+                    required
+                    style={styles.ticketInput}
+                  />
+                  <input
+                    name="precio"
+                    type="number"
+                    placeholder="$ Precio"
+                    value={boleto.precio}
+                    onChange={(e) => handleBoletoChange(index, e)}
+                    required
+                    style={styles.ticketInput}
+                  />
+                  <input
+                    name="cantidad_total"
+                    type="number"
+                    placeholder="Cantidad"
+                    value={boleto.cantidad_total}
+                    onChange={(e) => handleBoletoChange(index, e)}
+                    required
+                    style={styles.ticketInput}
+                  />
+                </div>
+                {tiposBoletos.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => eliminarTipoBoleto(index)}
+                    style={styles.deleteButton}
+                  >
+                    Eliminar
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div style={styles.footer}>
           <button type="submit" disabled={loading} style={styles.submitButton}>
-            {loading ? "Publicando..." : "Publicar Evento"}
+            {loading ? "Subiendo imagen y creando..." : "Publicar Evento"}
           </button>
-        </form>
-      </div>
+        </div>
+      </form>
     </div>
   );
 }
@@ -226,74 +263,154 @@ const styles = {
     display: "flex",
     justifyContent: "center",
     padding: "40px 20px",
-    minHeight: "80vh",
+    backgroundColor: "#f4f4f4",
+    minHeight: "90vh",
   },
-  card: {
+  formWrapper: {
     backgroundColor: "white",
-    padding: "30px",
-    borderRadius: "12px",
-    boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
     width: "100%",
-    maxWidth: "700px",
+    maxWidth: "800px",
+    borderRadius: "12px",
+    boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
+    padding: "40px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "30px",
   },
-  title: { textAlign: "center", marginBottom: "20px", color: "#333" },
-  subtitle: {
-    color: "#444",
-    borderBottom: "2px solid #f0f0f0",
-    paddingBottom: "5px",
-    marginTop: "20px",
-    marginBottom: "15px",
+  header: { borderBottom: "1px solid #eee", paddingBottom: "20px" },
+  title: { margin: 0, color: "#111", fontSize: "1.8rem" },
+  section: { display: "flex", flexDirection: "column", gap: "15px" },
+  sectionHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
-  form: { display: "flex", flexDirection: "column", gap: "10px" },
+  sectionTitle: {
+    fontSize: "1.1rem",
+    fontWeight: "bold",
+    color: "#333",
+    borderLeft: "4px solid #2563EB",
+    paddingLeft: "10px",
+  },
+  grid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" },
+  inputGroup: { display: "flex", flexDirection: "column", gap: "5px" },
+  label: { fontSize: "0.85rem", fontWeight: "bold", color: "#555" },
   input: {
     padding: "10px",
     borderRadius: "6px",
-    border: "1px solid #ccc",
+    border: "1px solid #ddd",
     fontSize: "0.95rem",
+    width: "100%",
+    boxSizing: "border-box",
   },
-  error: {
-    backgroundColor: "#ffebee",
-    color: "#c62828",
+  textarea: {
     padding: "10px",
-    borderRadius: "5px",
-    textAlign: "center",
-    marginBottom: "15px",
+    borderRadius: "6px",
+    border: "1px solid #ddd",
+    fontSize: "0.95rem",
+    width: "100%",
+    boxSizing: "border-box",
+    resize: "vertical",
+    fontFamily: "inherit",
   },
-
-  boletoRow: {
-    display: "flex",
+  ticketsContainer: { display: "flex", flexDirection: "column", gap: "15px" },
+  ticketCard: {
+    backgroundColor: "#f9fafb",
+    border: "1px solid #e5e7eb",
+    borderRadius: "8px",
+    padding: "15px",
+  },
+  ticketGrid: {
+    display: "grid",
+    gridTemplateColumns: "2fr 1fr 1fr",
     gap: "10px",
-    alignItems: "center",
-    marginBottom: "5px",
+  },
+  ticketInput: {
+    padding: "8px",
+    borderRadius: "4px",
+    border: "1px solid #ddd",
   },
   addButton: {
-    backgroundColor: "#f0f0f0",
-    color: "#333",
-    border: "1px dashed #999",
-    padding: "8px",
+    backgroundColor: "#e0e7ff",
+    color: "#3730a3",
+    border: "none",
+    padding: "8px 12px",
     borderRadius: "6px",
     cursor: "pointer",
-    marginTop: "5px",
     fontSize: "0.9rem",
-  },
-  deleteButton: {
-    backgroundColor: "#ff5252",
-    color: "white",
-    border: "none",
-    width: "30px",
-    height: "30px",
-    borderRadius: "50%",
-    cursor: "pointer",
     fontWeight: "bold",
   },
+  deleteButton: {
+    color: "#ef4444",
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    fontSize: "0.8rem",
+    marginTop: "5px",
+    textDecoration: "underline",
+  },
   submitButton: {
-    marginTop: "10px",
     padding: "15px",
-    backgroundColor: "#28a745",
+    backgroundColor: "#2563EB",
     color: "white",
     border: "none",
+    borderRadius: "8px",
+    fontSize: "1rem",
+    fontWeight: "bold",
+    cursor: "pointer",
+    width: "100%",
+  },
+  errorAlert: {
+    backgroundColor: "#fee2e2",
+    color: "#b91c1c",
+    padding: "10px",
     borderRadius: "6px",
-    fontSize: "1.1rem",
+  },
+
+  // ⭐️ ESTILOS DEL MODAL ⭐️
+  modalOverlay: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    backgroundColor: "rgba(0,0,0,0.6)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 2000,
+    backdropFilter: "blur(5px)",
+  },
+  modalCard: {
+    backgroundColor: "white",
+    padding: "40px",
+    borderRadius: "16px",
+    textAlign: "center",
+    width: "90%",
+    maxWidth: "400px",
+    boxShadow:
+      "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+  },
+  iconWrapper: { fontSize: "3rem", marginBottom: "15px" },
+  modalTitle: { fontSize: "1.5rem", color: "#111", margin: "0 0 10px 0" },
+  modalText: { color: "#666", marginBottom: "30px" },
+  modalActions: { display: "flex", flexDirection: "column", gap: "10px" },
+  primaryBtn: {
+    display: "block",
+    padding: "12px",
+    backgroundColor: "#10B981",
+    color: "white",
+    textDecoration: "none",
+    borderRadius: "8px",
+    fontWeight: "bold",
+    textAlign: "center",
+  },
+  secondaryBtn: {
+    padding: "12px",
+    backgroundColor: "transparent",
+    color: "#666",
+    border: "1px solid #ddd",
+    borderRadius: "8px",
     fontWeight: "bold",
     cursor: "pointer",
   },
