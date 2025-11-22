@@ -14,7 +14,7 @@ async function findAll() {
   }
 }
 
-// 2. Obtener un evento y sus boletos
+// 2. Obtener un evento y sus boletos (CORREGIDO: Sin JSON.parse extra)
 async function findById(eventoId) {
   const query = `
         SELECT 
@@ -37,18 +37,15 @@ async function findById(eventoId) {
     const [rows] = await pool.query(query, [eventoId]);
     if (rows.length === 0) return null;
 
-    const evento = rows[0];
-    // Parsear el array JSON que retorna MySQL
-    // evento.boletos = JSON.parse(evento.boletos);
-
-    return evento;
+    // MySQL devuelve el JSON ya parseado en la mayoría de drivers modernos
+    return rows[0];
   } catch (error) {
     console.error("Error al obtener evento por ID:", error);
     throw new Error("No se pudo cargar el detalle del evento.");
   }
 }
 
-// 3. Procesar la compra (¡con Transacción!)
+// 3. Procesar la compra
 async function comprarBoletos(boletoId, cantidad) {
   const connection = await pool.getConnection();
 
@@ -90,21 +87,26 @@ async function comprarBoletos(boletoId, cantidad) {
   }
 }
 
+// 4. Crear Evento con Múltiples Tipos de Boletos (CORREGIDO Y ACTUALIZADO)
 async function createEvento(
   nombre,
   descripcion,
   fecha,
   lugar,
   imagen_url,
-  usuario_id
+  usuario_id,
+  tiposBoletos
 ) {
   const connection = await pool.getConnection();
   try {
-    const query = `
+    await connection.beginTransaction();
+
+    // A. Insertar el Evento
+    const queryEvento = `
             INSERT INTO eventos (nombre, descripcion, fecha, lugar, imagen_url, usuario_id) 
             VALUES (?, ?, ?, ?, ?, ?)
         `;
-    const [result] = await connection.query(query, [
+    const [resultEvento] = await connection.query(queryEvento, [
       nombre,
       descripcion,
       fecha,
@@ -112,9 +114,28 @@ async function createEvento(
       imagen_url,
       usuario_id,
     ]);
+    const eventoId = resultEvento.insertId;
 
-    return { id: result.insertId, nombre };
+    // B. Insertar los Tipos de Boletos (Loop)
+    const queryBoleto = `
+            INSERT INTO boletos (evento_id, nombre_zona, precio, cantidad_total, cantidad_vendida)
+            VALUES (?, ?, ?, ?, 0)
+        `;
+
+    for (const boleto of tiposBoletos) {
+      await connection.query(queryBoleto, [
+        eventoId,
+        boleto.nombre_zona,
+        boleto.precio,
+        boleto.cantidad_total,
+      ]);
+    }
+
+    await connection.commit();
+
+    return { id: eventoId, nombre };
   } catch (error) {
+    await connection.rollback();
     throw error;
   } finally {
     connection.release();

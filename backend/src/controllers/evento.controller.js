@@ -1,6 +1,6 @@
 const eventoService = require("../services/evento.service");
 
-// Controlador GET /api/eventos
+// GET /api/eventos
 async function getEventos(req, res) {
   try {
     const eventos = await eventoService.findAll();
@@ -10,7 +10,7 @@ async function getEventos(req, res) {
   }
 }
 
-// Controlador GET /api/eventos/:id
+// GET /api/eventos/:id
 async function getEventoById(req, res) {
   const { id } = req.params;
   try {
@@ -24,7 +24,7 @@ async function getEventoById(req, res) {
   }
 }
 
-// Controlador POST /api/eventos/comprar
+// POST /api/eventos/comprar
 async function postComprarBoletos(req, res) {
   const { boletoId, cantidad } = req.body;
 
@@ -37,24 +37,36 @@ async function postComprarBoletos(req, res) {
     res.json(result);
   } catch (error) {
     if (error.message.includes("Inventario insuficiente")) {
-      return res.status(409).json({ message: error.message }); // 409 Conflict
+      return res.status(409).json({ message: error.message });
     }
     res.status(500).json({
-      message:
-        error.message || "Error interno del servidor al procesar la compra.",
+      message: error.message || "Error interno al procesar la compra.",
     });
   }
 }
 
+// POST /api/eventos (Crear Evento - ACTUALIZADO)
 async function postCreateEvento(req, res) {
-  // El ID del usuario creador viene del token decodificado (req.user)
   const usuario_id = req.user.id;
-  const { nombre, descripcion, fecha, lugar, imagen_url } = req.body;
+  // Extraemos tiposBoletos del body
+  const { nombre, descripcion, fecha, lugar, imagen_url, tiposBoletos } =
+    req.body;
 
   if (!nombre || !fecha || !lugar) {
     return res
       .status(400)
-      .json({ message: "Los campos Nombre, Fecha y Lugar son requeridos." });
+      .json({ message: "Nombre, fecha y lugar son requeridos." });
+  }
+
+  // Validación de boletos
+  if (
+    !tiposBoletos ||
+    !Array.isArray(tiposBoletos) ||
+    tiposBoletos.length === 0
+  ) {
+    return res
+      .status(400)
+      .json({ message: "Debes agregar al menos un tipo de boleto." });
   }
 
   try {
@@ -64,11 +76,13 @@ async function postCreateEvento(req, res) {
       fecha,
       lugar,
       imagen_url,
-      usuario_id
+      usuario_id,
+      tiposBoletos
     );
-    res
-      .status(201)
-      .json({ message: "Evento creado exitosamente.", evento: newEvento });
+    res.status(201).json({
+      message: "Evento y boletos creados exitosamente.",
+      evento: newEvento,
+    });
   } catch (error) {
     res
       .status(500)
