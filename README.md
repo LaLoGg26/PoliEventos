@@ -43,7 +43,7 @@ Antes de instalar, asegúrate de tener:
 
 1.  **Node.js** (v16 o superior) instalado.
 2.  **MySQL Server** corriendo localmente (XAMPP, MAMP, o instalación nativa).
-3.  **Git** (Opcional, para clonar).
+3.  **Git** (Opcional, para clonar el repositorio).
 
 ---
 
@@ -94,4 +94,95 @@ CREATE TABLE boletos (
     CHECK (cantidad_vendida <= cantidad_total),
     FOREIGN KEY (evento_id) REFERENCES eventos(id) ON DELETE CASCADE
 );
+```
+
+### 2. Configuración del Backend
+
+1.  Navega a la carpeta del backend:
+    ```bash
+    cd backend
+    ```
+2.  Instala las dependencias:
+    ```bash
+    npm install
+    ```
+3.  Crea un archivo `.env` en la raíz de `/backend` y configura tus credenciales:
+    ```env
+    DB_HOST=localhost
+    DB_USER=root
+    DB_PASSWORD=tu_contraseña
+    DB_NAME=ticketera_db
+    PORT=3001
+    JWT_SECRET=tu_clave_secreta_super_segura
+    ```
+
+### 3. Configuración del Frontend
+
+1.  Abre una **nueva terminal** y navega a la carpeta del frontend:
+    ```bash
+    cd frontend
+    ```
+2.  Instala las dependencias:
+    ```bash
+    npm install
+    ```
+
+---
+
+## ▶️ Ejecución del Proyecto
+
+Necesitarás tener **dos terminales** abiertas simultáneamente:
+
+**Terminal 1 (Backend):**
+
+```bash
+cd backend
+npm start
+```
+
+_Debería decir: "Servidor corriendo en el puerto 3001" y "Conexión exitosa a MySQL"._
+
+**Terminal 2 (Frontend):**
+
+```bash
+cd frontend
+npm run dev
+```
+
+_Abre el link que aparece (ej. http://localhost:5173) en tu navegador._
+
+---
+
+## 👤 Gestión de Usuarios (Cómo probar)
+
+Para probar las funcionalidades de **Vendedor**, sigue estos pasos:
+
+1.  Regístrate en la aplicación web como un usuario normal.
+2.  Ve a tu base de datos y ejecuta el siguiente comando para darte permisos:
+    ```sql
+    UPDATE usuarios
+    SET rol = 'VENDEDOR', suscripcion_activa = 1
+    WHERE email = 'tu_email@ejemplo.com';
+    ```
+3.  Haz Logout y vuelve a hacer Login. ¡Ahora verás el botón "Crear Evento"!
+
+---
+
+## 📂 Estructura del Proyecto
+
+```text
+/ticketera-app
+├── /backend          # API REST (Node.js/Express)
+│   ├── /src
+│   │   ├── /config       # Conexión DB
+│   │   ├── /controllers  # Lógica de peticiones
+│   │   ├── /middlewares  # Auth y seguridad
+│   │   ├── /routes       # Definición de rutas
+│   │   └── /services     # Lógica de negocio y SQL
+├── /frontend         # Cliente Web (React/Vite)
+│   ├── /src
+│   │   ├── /components   # Navbar, Footer
+│   │   ├── /context      # AuthContext (Estado global)
+│   │   ├── /pages        # Vistas (Home, Login, CreateEvent)
+│   │   └── /services     # Conexión con la API
 ```
