@@ -1,6 +1,5 @@
 import { Routes, Route, Link } from "react-router-dom";
 import { useState, useEffect } from "react";
-// Asegúrate de que getEventos se importa sin llaves si usas export default, o con llaves si usas export const/function
 import { getEventos } from "./services/eventoService";
 import EventDetailPage from "./pages/EventDetailPage";
 import "./App.css";
@@ -9,16 +8,15 @@ import "./App.css";
 function HomePage() {
   const [eventos, setEventos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null); // Corregido: Variable de estado para el error
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const cargarEventos = async () => {
       try {
         const data = await getEventos();
         setEventos(data);
-        setError(null); // Resetear error si la carga es exitosa
+        setError(null);
       } catch (err) {
-        // CORRECCIÓN APLICADA: Usamos setError para el mensaje en la vista
         setError("Error al cargar los eventos. ¿Está el backend corriendo?");
         console.error(err);
       } finally {
@@ -29,8 +27,8 @@ function HomePage() {
   }, []);
 
   if (loading) return <h1>Cargando Eventos...</h1>;
-  // Corregido: Usamos la variable de estado 'error' para mostrar el mensaje
-  if (error) return <h1 style={{ color: "red" }}>{error}</h1>;
+  if (error)
+    return <h1 style={{ color: "red", textAlign: "center" }}>{error}</h1>;
 
   return (
     <div className="App" style={{ textAlign: "center" }}>
@@ -61,7 +59,6 @@ function HomePage() {
             <p>📍 {evento.lugar}</p>
             <p>🗓️ {new Date(evento.fecha).toLocaleString()}</p>
 
-            {/* El Link para la navegación */}
             <Link to={`/evento/${evento.id}`}>
               <button
                 style={{

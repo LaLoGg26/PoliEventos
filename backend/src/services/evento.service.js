@@ -1,21 +1,20 @@
 const { pool } = require("../config/db.connector");
 
-// 1. Función para obtener la lista de todos los eventos
+// 1. Obtener lista de eventos
 async function findAll() {
   const query =
     "SELECT id, nombre, fecha, lugar, imagen_url FROM eventos ORDER BY fecha ASC";
 
   try {
-    // pool.query ejecuta la consulta directamente
     const [rows] = await pool.query(query);
-    return rows; // Retorna el array de eventos
+    return rows;
   } catch (error) {
     console.error("Error al obtener eventos:", error);
     throw new Error("No se pudieron cargar los eventos.");
   }
 }
 
-// 2. Función para obtener un evento y sus boletos (un JOIN)
+// 2. Obtener un evento y sus boletos
 async function findById(eventoId) {
   const query = `
         SELECT 
@@ -39,8 +38,8 @@ async function findById(eventoId) {
     if (rows.length === 0) return null;
 
     const evento = rows[0];
-    // MySQL devuelve la columna JSON_ARRAYAGG como string, debemos parsearla
-    evento.boletos = JSON.parse(evento.boletos);
+    // Parsear el array JSON que retorna MySQL
+    // evento.boletos = JSON.parse(evento.boletos);
 
     return evento;
   } catch (error) {
@@ -49,7 +48,82 @@ async function findById(eventoId) {
   }
 }
 
+// 3. Procesar la compra (¡con Transacción!)
+async function comprarBoletos(boletoId, cantidad) {
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [rows] = await connection.query(
+      "SELECT cantidad_total, cantidad_vendida FROM boletos WHERE id = ? FOR UPDATE",
+      [boletoId]
+    );
+
+    if (rows.length === 0) {
+      throw new Error("Boleto no encontrado.");
+    }
+
+    const boleto = rows[0];
+    const disponibles = boleto.cantidad_total - boleto.cantidad_vendida;
+
+    if (disponibles < cantidad) {
+      throw new Error(
+        `Inventario insuficiente. Solo quedan ${disponibles} boletos.`
+      );
+    }
+
+    const nuevaCantidadVendida = boleto.cantidad_vendida + cantidad;
+    await connection.query(
+      "UPDATE boletos SET cantidad_vendida = ? WHERE id = ?",
+      [nuevaCantidadVendida, boletoId]
+    );
+
+    await connection.commit();
+
+    return { success: true, message: `Compra de ${cantidad} boletos exitosa.` };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function createEvento(
+  nombre,
+  descripcion,
+  fecha,
+  lugar,
+  imagen_url,
+  usuario_id
+) {
+  const connection = await pool.getConnection();
+  try {
+    const query = `
+            INSERT INTO eventos (nombre, descripcion, fecha, lugar, imagen_url, usuario_id) 
+            VALUES (?, ?, ?, ?, ?, ?)
+        `;
+    const [result] = await connection.query(query, [
+      nombre,
+      descripcion,
+      fecha,
+      lugar,
+      imagen_url,
+      usuario_id,
+    ]);
+
+    return { id: result.insertId, nombre };
+  } catch (error) {
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 module.exports = {
   findAll,
   findById,
+  comprarBoletos,
+  createEvento,
 };
