@@ -10,6 +10,7 @@ import LoginPage from "./pages/LoginPage";
 import CreateEventPage from "./pages/CreateEventPage";
 import SellerDashboard from "./pages/SellerDashboard";
 import EditEventPage from "./pages/EditEventPage";
+import MyTicketsPage from "./pages/MyTicketPage";
 
 // ==========================================
 //                 COMPONENTS
@@ -32,6 +33,7 @@ function App() {
           {/*  Rutas del Vendedor  */}
           <Route path="/dashboard" element={<SellerDashboard />} />
           <Route path="/edit-event/:id" element={<EditEventPage />} />
+          <Route path="/mis-tickets" element={<MyTicketsPage />} />
           <Route
             path="*"
             element={

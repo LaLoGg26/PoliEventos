@@ -73,16 +73,30 @@ async function comprarBoletos(usuarioId, boletoId, cantidad) {
       [nuevaCantidadVendida, boletoId]
     );
 
-    // C. Registrar Compra
+    // C. Registrar Compra (Cabecera)
     const total = Number(boleto.precio) * Number(cantidad);
-    const uuidUnico = uuidv4();
 
-    await connection.query(
+    // Nota: Ya no guardamos 'uuid_unico' en la tabla compras, ese campo puede quedar null o podemos quitarlo después.
+    // Aquí insertamos la compra general.
+    const [resCompra] = await connection.query(
       "INSERT INTO compras (usuario_id, boleto_id, cantidad, total, uuid_unico) VALUES (?, ?, ?, ?, ?)",
-      [usuarioId, boletoId, cantidad, total, uuidUnico]
+      [usuarioId, boletoId, cantidad, total, "MULTI-ORDER"] // Ponemos un placeholder o uuid general
     );
 
-    // D. Obtener datos para el correo
+    const compraId = resCompra.insertId;
+    const listaUUIDs = [];
+
+    // D. Generar Tickets Individuales (El Bucle)
+    const queryTicket =
+      "INSERT INTO tickets (compra_id, uuid_unico) VALUES (?, ?)";
+
+    for (let i = 0; i < cantidad; i++) {
+      const uniqueCode = uuidv4(); // Código único para ESTE boleto
+      await connection.query(queryTicket, [compraId, uniqueCode]);
+      listaUUIDs.push(uniqueCode); // Lo guardamos para el PDF
+    }
+
+    // E. Obtener datos para correo
     const [userData] = await connection.query(
       "SELECT nombre, email FROM usuarios WHERE id = ?",
       [usuarioId]
@@ -92,17 +106,21 @@ async function comprarBoletos(usuarioId, boletoId, cantidad) {
       [boleto.evento_id]
     );
 
-    const compraData = { uuid_unico: uuidUnico, cantidad, total };
+    const datosCompra = { id_compra: compraId, total, cantidad };
 
-    // E. Enviar Correo (Sin bloquear la respuesta al usuario)
-    generarYEnviarBoleto(compraData, eventoData[0], userData[0], boleto).catch(
-      (err) => console.error("Error enviando correo:", err)
-    );
+    // F. Enviar Correo (Pasamos la LISTA de UUIDs)
+    generarYEnviarBoleto(
+      listaUUIDs,
+      eventoData[0],
+      userData[0],
+      boleto,
+      datosCompra
+    ).catch((err) => console.error("Error enviando correo:", err));
 
     await connection.commit();
     return {
       success: true,
-      message: `Compra exitosa. Boletos enviados a ${userData[0].email}`,
+      message: `Compra exitosa. Se han enviado ${cantidad} boletos a ${userData[0].email}`,
     };
   } catch (error) {
     await connection.rollback();
@@ -225,7 +243,7 @@ async function updateEvento(eventoId, userId, userRole, data) {
     // B. Actualizar Datos del Evento
     const queryEvento = `
             UPDATE eventos 
-            SET nombre = ?, descripcion = ?, fecha = ?, lugar = ?, latitud = ?, longitud = ?
+            SET nombre = ?, descripcion = ?, fecha = ?, lugar = ?, latitud = ?, longitud = ?, imagen_url = ?
             WHERE id = ?
         `;
 
@@ -236,6 +254,7 @@ async function updateEvento(eventoId, userId, userRole, data) {
       data.lugar,
       data.latitud,
       data.longitud,
+      data.imagen_url,
       eventoId,
     ]);
 
@@ -268,6 +287,115 @@ async function updateEvento(eventoId, userId, userRole, data) {
   }
 }
 
+// ... funciones anteriores ...
+
+// 8. Obtener historial de compras del usuario (Wallet)
+async function getHistorialCompras(usuarioId) {
+  const query = `
+        SELECT 
+            c.id as compra_id,
+            c.fecha_compra,
+            c.total,
+            c.cantidad,
+            e.nombre as evento_nombre,
+            e.fecha as evento_fecha,
+            e.lugar as evento_lugar,
+            e.imagen_url,
+            b.nombre_zona,
+            JSON_ARRAYAGG(
+                JSON_OBJECT(
+                    'uuid', t.uuid_unico,
+                    'estado', t.estado
+                )
+            ) as tickets
+        FROM compras c
+        JOIN boletos b ON c.boleto_id = b.id
+        JOIN eventos e ON b.evento_id = e.id
+        LEFT JOIN tickets t ON c.id = t.compra_id
+        WHERE c.usuario_id = ?
+        GROUP BY c.id
+        ORDER BY c.fecha_compra DESC
+    `;
+
+  const [rows] = await pool.query(query, [usuarioId]);
+  return rows;
+}
+
+// 9. Reenviar Correo (VERSIÓN ROBUSTA)
+async function reenviarCorreoCompra(compraId, userId) {
+  // 1. Obtener datos con alias muy claros para evitar confusiones
+  const queryInfo = `
+        SELECT 
+            c.id as compra_id, 
+            c.total, 
+            c.cantidad,
+            u.email as usuario_email, 
+            u.nombre as usuario_nombre,
+            e.nombre as evento_nombre, 
+            e.fecha as evento_fecha, 
+            e.lugar as evento_lugar,
+            b.nombre_zona, 
+            b.precio
+        FROM compras c
+        JOIN usuarios u ON c.usuario_id = u.id
+        JOIN boletos b ON c.boleto_id = b.id
+        JOIN eventos e ON b.evento_id = e.id
+        WHERE c.id = ? AND c.usuario_id = ?
+    `;
+
+  const [rows] = await pool.query(queryInfo, [compraId, userId]);
+
+  if (rows.length === 0) {
+    throw new Error("No se encontró la compra o no tienes permiso.");
+  }
+  const info = rows[0];
+
+  // 2. Obtener los UUIDs
+  const [rowsTickets] = await pool.query(
+    "SELECT uuid_unico FROM tickets WHERE compra_id = ?",
+    [compraId]
+  );
+
+  if (rowsTickets.length === 0) {
+    // Fallback: Si por alguna razón no hay tickets en la tabla tickets (compras viejas), generar uno temporal o lanzar error
+    // Para este caso, asumiremos que si es una compra válida, debe tener tickets.
+    // Si es una compra "vieja" (antes del sistema de tickets), esto fallará.
+    throw new Error(
+      "Esta compra es antigua y no tiene tickets generados para reenviar."
+    );
+  }
+
+  const listaUUIDs = rowsTickets.map((t) => t.uuid_unico);
+
+  // 3. Construir objetos para el PDF
+  const eventoObj = {
+    nombre: info.evento_nombre,
+    fecha: info.evento_fecha,
+    lugar: info.evento_lugar,
+  };
+  const usuarioObj = { nombre: info.usuario_nombre, email: info.usuario_email };
+  const boletoObj = { nombre_zona: info.nombre_zona, precio: info.precio };
+  const datosCompra = {
+    id_compra: info.compra_id,
+    total: info.total,
+    cantidad: info.cantidad,
+  };
+
+  // 4. Enviar
+  await generarYEnviarBoleto(
+    listaUUIDs,
+    eventoObj,
+    usuarioObj,
+    boletoObj,
+    datosCompra
+  );
+
+  return {
+    success: true,
+    message: `Correo reenviado exitosamente a ${info.usuario_email}`,
+  };
+}
+
 module.exports = {
   findAll,
   findById,
@@ -276,4 +404,6 @@ module.exports = {
   getEventsForDashboard,
   deleteEvento,
   updateEvento,
+  getHistorialCompras,
+  reenviarCorreoCompra,
 };

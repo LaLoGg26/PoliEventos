@@ -20,35 +20,32 @@ let DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-// Este componente mueve la cámara del mapa cuando cambian las coordenadas
 function MapUpdater({ position }) {
   const map = useMap();
   useEffect(() => {
     if (position) {
       map.setView(position, 13);
     }
-  }, [position, map]); // Solo se mueve si la 'position' que viene del padre cambia
+  }, [position, map]);
   return null;
 }
 
-// Este componente detecta los clics y avisa al padre
 function LocationMarker({ position, onLocationSelect }) {
   useMapEvents({
     click(e) {
-      // Al hacer clic, NO guardamos estado aquí.
-      // Solo le avisamos al padre: "Oye, el usuario quiere esta ubicación"
       onLocationSelect(e.latlng);
     },
   });
-  // Renderiza el marcador donde diga el padre (position)
-  return position === null ? null : <Marker position={position}></Marker>;
+
+  // 🛠️ CORRECCIÓN AQUÍ:
+  // Usamos !position para detectar tanto null como undefined.
+  if (!position) return null;
+
+  return <Marker position={position}></Marker>;
 }
 
 function LocationPicker({ onLocationSelect, initialPosition }) {
   const defaultCenter = [19.4326, -99.1332];
-
-  // NOTA: Ya no hay useState ni useEffect aquí.
-  // Confiamos ciegamente en 'initialPosition' que viene desde EditEventPage.
 
   return (
     <div
@@ -70,7 +67,6 @@ function LocationPicker({ onLocationSelect, initialPosition }) {
           attribution="&copy; OpenStreetMap"
         />
 
-        {/* Componentes controlados por las props */}
         <MapUpdater position={initialPosition} />
 
         <LocationMarker

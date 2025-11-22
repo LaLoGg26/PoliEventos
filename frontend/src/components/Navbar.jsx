@@ -6,33 +6,39 @@ function Navbar() {
 
   return (
     <nav style={styles.nav}>
-      {/* Logo / Home */}
+      {/* Logo / Home (Visible para todos) */}
       <Link to="/" style={styles.logo}>
         🎟️ PoliEventos MVP
       </Link>
 
       <div style={styles.linksContainer}>
-        {isAuthenticated ? (
-          // SI EL USUARIO ESTÁ LOGUEADO
+        {/* 🔒 LÓGICA DE PROTECCIÓN: Solo mostramos esto si hay usuario logueado */}
+        {isAuthenticated && user ? (
           <>
-            {/* Saludo (con texto cortado si es muy largo) */}
+            {/* 1. Saludo */}
             <span style={styles.welcome} title={`Hola, ${user.nombre}`}>
               Hola, {user.nombre} ({user.rol})
             </span>
 
-            {/* Botón Dashboard: Solo para Vendedores o Super Usuarios */}
+            {/* 2. Botón Dashboard (Solo Vendedores/Admin) */}
             {(user.rol === "VENDEDOR" || user.rol === "SUPER_USER") && (
               <Link to="/dashboard" style={styles.dashboardBtn}>
                 ⚙️ Mis Eventos
               </Link>
             )}
 
+            {/* 3. Botón Wallet (Para TODOS los usuarios logueados: Compradores y Vendedores) */}
+            <Link to="/mis-tickets" style={styles.walletBtn}>
+              🎟️ Mis Tickets
+            </Link>
+
+            {/* 4. Logout */}
             <button onClick={logout} style={styles.logoutButton}>
               Logout
             </button>
           </>
         ) : (
-          // SI EL USUARIO NO ESTÁ LOGUEADO
+          // 🔓 SI NO ESTÁ LOGUEADO: Mostrar Login/Registro
           <>
             <Link to="/login" style={styles.navLink}>
               Login
@@ -52,22 +58,22 @@ const styles = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: "20px 20px", // Padding lateral seguro
-    backgroundColor: "#333", // Fondo oscuro
+    padding: "20px 20px",
+    backgroundColor: "#333",
     color: "white",
     width: "100%",
-    boxSizing: "border-box", // ⭐️ CLAVE: Evita que la barra se salga de la pantalla
+    boxSizing: "border-box",
     minHeight: "3rem",
     position: "fixed",
     top: 0,
     left: 0,
     zIndex: 1000,
-    boxShadow: "0 2px 5px rgba(0,0,0,0.2)", // Sombra suave inferior
+    boxShadow: "0 2px 5px rgba(0,0,0,0.2)",
   },
   logo: {
     color: "white",
     textDecoration: "none",
-    fontSize: "2rem",
+    fontSize: "1.5rem",
     fontWeight: "bold",
     whiteSpace: "nowrap",
   },
@@ -90,16 +96,16 @@ const styles = {
     color: "#ccc",
     fontSize: "0.85rem",
     whiteSpace: "nowrap",
-    maxWidth: "200px", // Limita el ancho si el nombre es muy largo
+    maxWidth: "150px",
     overflow: "hidden",
     textOverflow: "ellipsis",
     display: "inline-block",
     verticalAlign: "middle",
     cursor: "default",
   },
-  // Estilo para el botón del Dashboard (Gestión)
+  // Estilo para botón Dashboard (Amarillo/Naranja)
   dashboardBtn: {
-    backgroundColor: "#F59E0B", // Color ámbar para diferenciar gestión
+    backgroundColor: "#F59E0B",
     color: "white",
     textDecoration: "none",
     padding: "6px 12px",
@@ -108,8 +114,20 @@ const styles = {
     fontWeight: "bold",
     whiteSpace: "nowrap",
   },
+  // Estilo para botón Wallet (Azul)
+  walletBtn: {
+    backgroundColor: "#2563EB",
+    color: "white",
+    textDecoration: "none",
+    padding: "6px 12px",
+    borderRadius: "4px",
+    fontSize: "0.85rem",
+    fontWeight: "bold",
+    whiteSpace: "nowrap",
+  },
+  // Estilo Logout (Rojo)
   logoutButton: {
-    backgroundColor: "#dc3545", // Rojo
+    backgroundColor: "#dc3545",
     color: "white",
     border: "none",
     padding: "6px 12px",

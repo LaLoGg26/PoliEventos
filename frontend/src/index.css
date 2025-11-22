@@ -22,3 +22,17 @@ body {
   max-width: none;
   text-align: left;
 }
+
+/* Ajustes para móviles */
+@media (max-width: 768px) {
+  /* Hacer que el texto del saludo se oculte en móviles para ahorrar espacio */
+  .nav-welcome {
+    display: none;
+  }
+
+  /* Ajustar botones para que sean más pequeños */
+  button,
+  a {
+    font-size: 0.8rem;
+  }
+}

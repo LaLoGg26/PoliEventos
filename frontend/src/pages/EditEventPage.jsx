@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import LocationPicker from "../components/LocationPicker";
 
@@ -7,7 +7,6 @@ const API_URL = "http://localhost:3001/api/eventos";
 
 function EditEventPage() {
   const { id } = useParams();
-  // ✅ SOLUCIÓN A: Usamos 'user' para validar permisos abajo
   const { user, token } = useAuth();
   const navigate = useNavigate();
 
@@ -16,23 +15,23 @@ function EditEventPage() {
     descripcion: "",
     fecha: "",
     lugar: "",
+    imagen_url: "",
   });
+  const [newImageFile, setNewImageFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+
   const [coords, setCoords] = useState(null);
   const [boletos, setBoletos] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // ✅ EFECTO DE PROTECCIÓN DE RUTA
+  // Estado para el modal
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+
   useEffect(() => {
-    if (!user) {
-      navigate("/login");
-      return;
-    }
-    if (user.rol !== "VENDEDOR" && user.rol !== "SUPER_USER") {
-      navigate("/");
-    }
+    if (!user) return navigate("/login");
+    if (user.rol !== "VENDEDOR" && user.rol !== "SUPER_USER") navigate("/");
   }, [user, navigate]);
 
-  // Efecto para cargar datos del evento
   useEffect(() => {
     fetch(`${API_URL}/${id}`)
       .then((res) => res.json())
@@ -46,6 +45,7 @@ function EditEventPage() {
           descripcion: data.descripcion,
           lugar: data.lugar,
           fecha: localISOTime,
+          imagen_url: data.imagen_url,
         });
 
         if (data.latitud && data.longitud) {
@@ -68,6 +68,14 @@ function EditEventPage() {
 
   const handleChange = (e) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setNewImageFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
+    }
+  };
 
   const handleBoletoChange = (index, field, value) => {
     const nuevos = [...boletos];
@@ -96,32 +104,44 @@ function EditEventPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const payload = {
-      ...formData,
-      latitud: coords ? coords.lat : null,
-      longitud: coords ? coords.lng : null,
-      tiposBoletos: boletos.map((b) => ({
-        id: b.id,
-        nombre_zona: b.nombre_zona,
-        precio: parseFloat(b.precio),
-        cantidad_total: parseInt(b.cantidad_total),
-        activo: b.activo,
-      })),
-    };
+    const data = new FormData();
+    data.append("nombre", formData.nombre);
+    data.append("descripcion", formData.descripcion);
+    data.append("fecha", formData.fecha);
+    data.append("lugar", formData.lugar);
+
+    if (newImageFile) {
+      data.append("imagen", newImageFile);
+    } else {
+      // Si la imagen ya existe, enviamos la URL anterior
+      if (formData.imagen_url) {
+        data.append("imagen_url", formData.imagen_url);
+      }
+    }
+
+    if (coords) {
+      data.append("latitud", coords.lat);
+      data.append("longitud", coords.lng);
+    }
+
+    const boletosProcesados = boletos.map((b) => ({
+      id: b.id,
+      nombre_zona: b.nombre_zona,
+      precio: parseFloat(b.precio),
+      cantidad_total: parseInt(b.cantidad_total),
+      activo: b.activo,
+    }));
+    data.append("tiposBoletos", JSON.stringify(boletosProcesados));
 
     try {
       const res = await fetch(`${API_URL}/${id}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
+        headers: { Authorization: `Bearer ${token}` },
+        body: data,
       });
 
       if (res.ok) {
-        alert("¡Evento actualizado correctamente!");
-        navigate("/dashboard");
+        setShowSuccessModal(true);
       } else {
         const errorData = await res.json();
         alert("Error: " + errorData.message);
@@ -138,6 +158,32 @@ function EditEventPage() {
 
   return (
     <div style={styles.container}>
+      {/* MODAL DE ÉXITO */}
+      {showSuccessModal && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalCard}>
+            <div style={styles.iconWrapper}>✨</div>
+            <h2 style={styles.modalTitle}>¡Cambios Guardados!</h2>
+            <p style={styles.modalText}>
+              El evento <strong>"{formData.nombre}"</strong> ha sido actualizado
+              correctamente.
+            </p>
+
+            <div style={styles.modalActions}>
+              <Link to={`/evento/${id}`} style={styles.primaryBtn}>
+                Ver Cambios
+              </Link>
+              <button
+                onClick={() => navigate("/dashboard")}
+                style={styles.secondaryBtn}
+              >
+                Volver al Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={styles.card}>
         <h2>✏️ Editar Evento</h2>
         <form onSubmit={handleSubmit} style={styles.form}>
@@ -148,6 +194,28 @@ function EditEventPage() {
             onChange={handleChange}
             style={styles.input}
           />
+
+          {/* Sección Imagen */}
+          <div style={styles.imageSection}>
+            <label style={styles.label}>Imagen de Portada</label>
+            <div style={styles.imagePreviewContainer}>
+              {previewUrl || formData.imagen_url ? (
+                <img
+                  src={previewUrl || formData.imagen_url}
+                  alt="Portada"
+                  style={styles.imagePreview}
+                />
+              ) : (
+                <div style={styles.noImage}>Sin imagen</div>
+              )}
+            </div>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              style={{ marginTop: "10px" }}
+            />
+          </div>
 
           <label style={styles.label}>Descripción</label>
           <textarea
@@ -218,6 +286,7 @@ function EditEventPage() {
                       ? "🆕 Nuevo Boleto"
                       : `🎫 ${boleto.nombre_zona}`}
                   </span>
+
                   {boleto.isNew ? (
                     <button
                       type="button"
@@ -235,16 +304,14 @@ function EditEventPage() {
                           handleBoletoChange(index, "activo", e.target.checked)
                         }
                       />
-                      {boleto.activo
-                        ? " Activo (Visible)"
-                        : " Inactivo (Oculto)"}
+                      {boleto.activo ? " Activo" : " Inactivo"}
                     </label>
                   )}
                 </div>
 
                 <div style={styles.gridBoletos}>
                   <input
-                    placeholder="Nombre Zona"
+                    placeholder="Zona"
                     value={boleto.nombre_zona}
                     onChange={(e) =>
                       handleBoletoChange(index, "nombre_zona", e.target.value)
@@ -311,7 +378,7 @@ const styles = {
   container: {
     display: "flex",
     justifyContent: "center",
-    padding: "40px",
+    padding: "40px 20px",
     minHeight: "80vh",
     backgroundColor: "#f4f4f4",
   },
@@ -354,6 +421,27 @@ const styles = {
     width: "100%",
     boxSizing: "border-box",
   },
+
+  imageSection: {
+    border: "1px dashed #ccc",
+    padding: "15px",
+    borderRadius: "8px",
+    backgroundColor: "#fafafa",
+  },
+  imagePreviewContainer: {
+    width: "100%",
+    height: "200px",
+    backgroundColor: "#eee",
+    borderRadius: "8px",
+    overflow: "hidden",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: "10px",
+  },
+  imagePreview: { width: "100%", height: "100%", objectFit: "cover" },
+  noImage: { color: "#999", fontStyle: "italic" },
+
   boletosContainer: { display: "flex", flexDirection: "column", gap: "10px" },
   boletoCard: {
     padding: "15px",
@@ -410,6 +498,53 @@ const styles = {
     borderRadius: "6px",
     cursor: "pointer",
     fontWeight: "bold",
+  },
+
+  modalOverlay: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    backgroundColor: "rgba(0,0,0,0.6)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 2000,
+    backdropFilter: "blur(5px)",
+  },
+  modalCard: {
+    backgroundColor: "white",
+    padding: "40px",
+    borderRadius: "16px",
+    textAlign: "center",
+    width: "90%",
+    maxWidth: "400px",
+    boxShadow:
+      "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+  },
+  iconWrapper: { fontSize: "3rem", marginBottom: "15px" },
+  modalTitle: { fontSize: "1.5rem", color: "#111", margin: "0 0 10px 0" },
+  modalText: { color: "#666", marginBottom: "30px" },
+  modalActions: { display: "flex", flexDirection: "column", gap: "10px" },
+  primaryBtn: {
+    display: "block",
+    padding: "12px",
+    backgroundColor: "#F59E0B",
+    color: "white",
+    textDecoration: "none",
+    borderRadius: "8px",
+    fontWeight: "bold",
+    textAlign: "center",
+  },
+  secondaryBtn: {
+    padding: "12px",
+    backgroundColor: "transparent",
+    color: "#666",
+    border: "1px solid #ddd",
+    borderRadius: "8px",
+    fontWeight: "bold",
+    cursor: "pointer",
   },
 };
 

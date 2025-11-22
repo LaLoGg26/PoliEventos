@@ -1,18 +1,17 @@
 const express = require("express");
 const router = express.Router();
 const eventoController = require("../controllers/evento.controller");
-const upload = require("../config/cloudinary.config");
-// ⭐️ IMPORTAMOS los middlewares de protección ⭐️
+const upload = require("../config/cloudinary.config"); // Middleware de imágenes
 const {
   protect,
   checkSubscription,
 } = require("../middlewares/auth.middleware");
 
 // ==========================================
-// 1. RUTAS PÚBLICAS (COMPRADORES Y VISITANTES)
+// 🚨 RUTAS ESPECÍFICAS (VAN PRIMERO) 🚨
 // ==========================================
 
-// Ver mis eventos (Dashboard)
+// 1. Dashboard (Vendedor)
 router.get(
   "/dashboard/mis-eventos",
   protect,
@@ -20,16 +19,39 @@ router.get(
   eventoController.getDashboardEvents
 );
 
-// POST /api/eventos/comprar - Procesar la compra de boletos (Cualquier usuario o visitante)
+// 2. Wallet (Comprador - Mis Tickets)
+router.get("/usuario/mis-tickets", protect, eventoController.getMisTickets);
+
+// 3. Reenviar Correo (ESTA ES LA QUE FALTABA O ESTABA MAL UBICADA)
+router.post(
+  "/usuario/reenviar-correo",
+  protect,
+  eventoController.postReenviarCorreo
+);
+
+// 4. Procesar compra
 router.post("/comprar", protect, eventoController.postComprarBoletos);
 
-// GET /api/eventos - Obtener lista de todos los eventos
+// ==========================================
+// RUTAS GENERALES Y DINÁMICAS (VAN DESPUÉS)
+// ==========================================
+
+// 5. Obtener lista de eventos (Home)
 router.get("/", eventoController.getEventos);
 
-// GET /api/eventos/:id - Obtener detalle de un evento específico
+// 6. Crear evento (Vendedor)
+router.post(
+  "/",
+  protect,
+  checkSubscription,
+  upload.single("imagen"),
+  eventoController.postCreateEvento
+);
+
+// 7. Obtener detalle por ID (¡Cuidado! Esta ruta captura todo lo que parezca un ID)
 router.get("/:id", eventoController.getEventoById);
 
-// Eliminar evento (Dueño o Admin)
+// 8. Eliminar evento
 router.delete(
   "/:id",
   protect,
@@ -37,23 +59,13 @@ router.delete(
   eventoController.deleteEvento
 );
 
-// Editar evento (Dueño o Admin)
-router.put("/:id", protect, checkSubscription, eventoController.updateEvento);
-
-// ======================================================
-// 2. RUTA PROTEGIDA (VENDEDORES CON SUSCRIPCIÓN ACTIVA)
-// ======================================================
-
-// POST /api/eventos - Crear un nuevo evento
-// Requiere:
-// 1. estar logueado (protect)
-// 2. ser VENDEDOR o SUPER_USER Y tener suscripción activa (checkSubscription)
-router.post(
-  "/",
+// 9. Editar evento
+router.put(
+  "/:id",
   protect,
   checkSubscription,
   upload.single("imagen"),
-  eventoController.postCreateEvento
+  eventoController.updateEvento
 );
 
 module.exports = router;

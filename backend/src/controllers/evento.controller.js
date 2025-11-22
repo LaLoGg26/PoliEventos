@@ -125,13 +125,35 @@ async function deleteEvento(req, res) {
 // PUT /api/eventos/:id
 async function updateEvento(req, res) {
   const { id } = req.params;
+  const imagen_url = req.file ? req.file.path : req.body.imagen_url;
+  const { nombre, descripcion, fecha, lugar, latitud, longitud } = req.body;
+
+  let tiposBoletos;
   try {
-    // req.body trae { nombre, descripcion, ... }
+    if (req.body.tiposBoletos) {
+      tiposBoletos = JSON.parse(req.body.tiposBoletos);
+    }
+  } catch (e) {
+    return res.status(400).json({ message: "Formato de boletos inválido." });
+  }
+
+  const updateData = {
+    nombre,
+    descripcion,
+    fecha,
+    lugar,
+    latitud,
+    longitud,
+    imagen_url,
+    tiposBoletos,
+  };
+
+  try {
     const updated = await eventoService.updateEvento(
       id,
       req.user.id,
       req.user.rol,
-      req.body
+      updateData
     );
     res.json({ message: "Evento actualizado.", evento: updated });
   } catch (error) {
@@ -139,13 +161,37 @@ async function updateEvento(req, res) {
   }
 }
 
-// ACTUALIZA EL EXPORT:
+// GET /api/eventos/usuario/mis-tickets
+async function getMisTickets(req, res) {
+  try {
+    const historial = await eventoService.getHistorialCompras(req.user.id);
+    res.json(historial);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+}
+
+async function postReenviarCorreo(req, res) {
+  const { compraId } = req.body;
+  try {
+    const resultado = await eventoService.reenviarCorreoCompra(
+      compraId,
+      req.user.id
+    );
+    res.json(resultado);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+}
+
 module.exports = {
   getEventos,
   getEventoById,
   postComprarBoletos,
   postCreateEvento,
-  getDashboardEvents, // Nuevo
-  deleteEvento, // Nuevo
-  updateEvento, // Nuevo
+  getDashboardEvents,
+  deleteEvento,
+  updateEvento,
+  getMisTickets,
+  postReenviarCorreo,
 };

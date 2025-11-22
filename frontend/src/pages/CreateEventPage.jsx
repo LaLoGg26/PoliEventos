@@ -9,7 +9,6 @@ function CreateEventPage() {
   const { user, token } = useAuth();
   const navigate = useNavigate();
 
-  // Datos del formulario
   const [formData, setFormData] = useState({
     nombre: "",
     descripcion: "",
@@ -26,14 +25,18 @@ function CreateEventPage() {
 
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
-
-  // ⭐️ NUEVOS ESTADOS PARA EL MODAL DE ÉXITO ⭐️
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [createdEventId, setCreatedEventId] = useState(null);
 
+  // Protección de ruta
   useEffect(() => {
-    if (!user) return navigate("/login");
-    if (user.rol !== "VENDEDOR" && user.rol !== "SUPER_USER") navigate("/");
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+    if (user.rol !== "VENDEDOR" && user.rol !== "SUPER_USER") {
+      navigate("/");
+    }
   }, [user, navigate]);
 
   const handleChange = (e) =>
@@ -44,11 +47,13 @@ function CreateEventPage() {
     nuevos[index][e.target.name] = e.target.value;
     setTiposBoletos(nuevos);
   };
+
   const agregarTipoBoleto = () =>
     setTiposBoletos([
       ...tiposBoletos,
       { nombre_zona: "", precio: "", cantidad_total: "" },
     ]);
+
   const eliminarTipoBoleto = (index) => {
     const nuevos = tiposBoletos.filter((_, i) => i !== index);
     setTiposBoletos(nuevos);
@@ -64,7 +69,9 @@ function CreateEventPage() {
     data.append("descripcion", formData.descripcion);
     data.append("fecha", formData.fecha);
     data.append("lugar", formData.lugar);
+
     if (imagenFile) data.append("imagen", imagenFile);
+
     if (coords) {
       data.append("latitud", coords.lat);
       data.append("longitud", coords.lng);
@@ -87,7 +94,6 @@ function CreateEventPage() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.message);
 
-      // ⭐️ ÉXITO: Guardamos el ID y mostramos el Modal ⭐️
       setCreatedEventId(result.evento.id);
       setShowSuccessModal(true);
     } catch (err) {
@@ -99,17 +105,14 @@ function CreateEventPage() {
 
   return (
     <div style={styles.container}>
-      {/* ⭐️ MODAL DE ÉXITO ⭐️ */}
       {showSuccessModal && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalCard}>
             <div style={styles.iconWrapper}>🎉</div>
             <h2 style={styles.modalTitle}>¡Evento Publicado!</h2>
             <p style={styles.modalText}>
-              Tu evento <strong>"{formData.nombre}"</strong> ya está disponible
-              para la venta.
+              Tu evento <strong>"{formData.nombre}"</strong> ya está disponible.
             </p>
-
             <div style={styles.modalActions}>
               <Link to={`/evento/${createdEventId}`} style={styles.primaryBtn}>
                 Ver Evento Creado
@@ -187,7 +190,19 @@ function CreateEventPage() {
               <label style={styles.label}>
                 Ubicación Exacta (Haz clic en el mapa)
               </label>
+              {/* Al no pasar 'initialPosition', el mapa inicia en el default */}
               <LocationPicker onLocationSelect={setCoords} />
+              {coords && (
+                <p
+                  style={{
+                    color: "green",
+                    fontSize: "0.8rem",
+                    marginTop: "5px",
+                  }}
+                >
+                  ✅ Ubicación seleccionada
+                </p>
+              )}
             </div>
           </div>
         </section>
@@ -250,7 +265,7 @@ function CreateEventPage() {
 
         <div style={styles.footer}>
           <button type="submit" disabled={loading} style={styles.submitButton}>
-            {loading ? "Subiendo imagen y creando..." : "Publicar Evento"}
+            {loading ? "Publicando..." : "Publicar Evento"}
           </button>
         </div>
       </form>
@@ -366,8 +381,6 @@ const styles = {
     padding: "10px",
     borderRadius: "6px",
   },
-
-  // ⭐️ ESTILOS DEL MODAL ⭐️
   modalOverlay: {
     position: "fixed",
     top: 0,
@@ -388,8 +401,7 @@ const styles = {
     textAlign: "center",
     width: "90%",
     maxWidth: "400px",
-    boxShadow:
-      "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+    boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)",
   },
   iconWrapper: { fontSize: "3rem", marginBottom: "15px" },
   modalTitle: { fontSize: "1.5rem", color: "#111", margin: "0 0 10px 0" },
