@@ -28,20 +28,31 @@ async function getEventoById(req, res) {
 async function postComprarBoletos(req, res) {
   const { boletoId, cantidad } = req.body;
 
+  // Verificar que el usuario esté logueado
+  if (!req.user || !req.user.id) {
+    return res
+      .status(401)
+      .json({ message: "Debes iniciar sesión para comprar." });
+  }
+
+  const usuarioId = req.user.id;
+
   if (!boletoId || !cantidad || cantidad <= 0) {
-    return res.status(400).json({ message: "Datos de compra inválidos." });
+    return res.status(400).json({ message: "Datos inválidos." });
   }
 
   try {
-    const result = await eventoService.comprarBoletos(boletoId, cantidad);
+    // Pasamos usuarioId como primer parámetro
+    const result = await eventoService.comprarBoletos(
+      usuarioId,
+      boletoId,
+      cantidad
+    );
     res.json(result);
   } catch (error) {
-    if (error.message.includes("Inventario insuficiente")) {
+    if (error.message.includes("Inventario"))
       return res.status(409).json({ message: error.message });
-    }
-    res.status(500).json({
-      message: error.message || "Error interno al procesar la compra.",
-    });
+    res.status(500).json({ message: error.message });
   }
 }
 

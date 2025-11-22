@@ -1,14 +1,34 @@
 import { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { getEventoById, comprarBoletosAPI } from "../services/eventoService";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet"; // ⭐️ Mapas
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
+import { useAuth } from "../context/AuthContext"; // 1. Importar Auth
+
+// Fix para iconos de Leaflet
+import L from "leaflet";
+import icon from "leaflet/dist/images/marker-icon.png";
+import iconShadow from "leaflet/dist/images/marker-shadow.png";
+
+let DefaultIcon = L.icon({
+  iconUrl: icon,
+  shadowUrl: iconShadow,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+});
+L.Marker.prototype.options.icon = DefaultIcon;
 
 function EventDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
+
+  // 2. Obtener usuario y token
+  const { user, token } = useAuth();
+
   const [evento, setEvento] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
   const [cantidad, setCantidad] = useState(1);
   const [mensajeCompra, setMensajeCompra] = useState(null);
 
@@ -31,10 +51,22 @@ function EventDetailPage() {
 
   const handleComprar = async (boletoId) => {
     setMensajeCompra(null);
+
+    // 3. Verificación de Sesión
+    if (!user || !token) {
+      alert("Debes iniciar sesión para comprar boletos.");
+      navigate("/login");
+      return;
+    }
+
     if (cantidad <= 0) return;
+
     try {
-      const result = await comprarBoletosAPI(boletoId, cantidad);
+      // 4. Enviar Token a la API
+      const result = await comprarBoletosAPI(boletoId, cantidad, token);
       setMensajeCompra({ type: "success", text: result.message });
+
+      // Recargar datos para actualizar stock
       await cargarEvento();
       setCantidad(1);
     } catch (error) {
@@ -68,9 +100,8 @@ function EventDetailPage() {
       </Link>
 
       <div style={styles.layout}>
-        {/* Columna Izquierda */}
+        {/* --- Columna Izquierda: Información --- */}
         <div style={styles.eventInfo}>
-          {/* ⭐️ IMAGEN DEL EVENTO ⭐️ */}
           <div style={styles.imageContainer}>
             {evento.imagen_url ? (
               <img
@@ -98,7 +129,6 @@ function EventDetailPage() {
             <p>{evento.descripcion}</p>
           </div>
 
-          {/* ⭐️ MAPA DE UBICACIÓN ⭐️ */}
           {evento.latitud && evento.longitud && (
             <div style={styles.mapWrapper}>
               <h3>Ubicación</h3>
@@ -116,9 +146,10 @@ function EventDetailPage() {
           )}
         </div>
 
-        {/* Columna Derecha (Tickets) */}
+        {/* --- Columna Derecha: Tickets --- */}
         <div style={styles.ticketSection}>
           <h2 style={styles.ticketTitle}>Selecciona tus Boletos</h2>
+
           {mensajeCompra && (
             <div
               style={
@@ -130,8 +161,10 @@ function EventDetailPage() {
               {mensajeCompra.text}
             </div>
           )}
+
           <div style={styles.ticketsList}>
             {evento.boletos
+              // 5. Filtro: Solo mostrar boletos activos
               .filter((boleto) => boleto.activo === 1 || boleto.activo === true)
               .map((boleto) => (
                 <div key={boleto.id} style={styles.ticketCard}>
@@ -144,6 +177,7 @@ function EventDetailPage() {
                     </span>
                   </div>
                   <div style={styles.priceTag}>${boleto.precio.toFixed(2)}</div>
+
                   <div style={styles.buyActions}>
                     <input
                       type="number"
@@ -197,11 +231,13 @@ const styles = {
     textDecoration: "none",
     fontWeight: "bold",
   },
+
   layout: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
     gap: "40px",
   },
+
   eventInfo: {
     backgroundColor: "white",
     padding: "30px",
@@ -224,6 +260,7 @@ const styles = {
     fontSize: "1.5rem",
     color: "#888",
   },
+
   title: { margin: "0 0 10px 0", fontSize: "2rem", color: "#111" },
   meta: {
     color: "#555",
@@ -237,15 +274,18 @@ const styles = {
     color: "#444",
     lineHeight: "1.6",
   },
+
   mapWrapper: {
     marginTop: "30px",
     borderRadius: "12px",
     overflow: "hidden",
     border: "1px solid #eee",
   },
+
   ticketSection: { display: "flex", flexDirection: "column", gap: "20px" },
   ticketTitle: { fontSize: "1.5rem", margin: "0 0 10px 0" },
   ticketsList: { display: "flex", flexDirection: "column", gap: "15px" },
+
   ticketCard: {
     backgroundColor: "white",
     border: "1px solid #e5e7eb",
@@ -270,6 +310,7 @@ const styles = {
     borderRadius: "4px",
   },
   priceTag: { fontSize: "1.5rem", fontWeight: "bold", color: "#2563EB" },
+
   buyActions: { display: "flex", gap: "10px" },
   qtyInput: {
     width: "60px",
@@ -296,6 +337,7 @@ const styles = {
     cursor: "not-allowed",
     fontWeight: "bold",
   },
+
   msgSuccess: {
     backgroundColor: "#d1fae5",
     color: "#065f46",

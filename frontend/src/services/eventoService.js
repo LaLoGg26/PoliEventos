@@ -28,11 +28,13 @@ export async function getEventoById(id) {
   }
 }
 
-export async function comprarBoletosAPI(boletoId, cantidad) {
+export async function comprarBoletosAPI(boletoId, cantidad, token) {
+  // 1. Agregamos 'token' aquí
   const response = await fetch(`${API_URL}/eventos/comprar`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`, // 2. Enviamos el token en el Header
     },
     body: JSON.stringify({ boletoId, cantidad }),
   });

@@ -1,4 +1,6 @@
 const { pool } = require("../config/db.connector");
+const { v4: uuidv4 } = require("uuid"); // Importar UUID
+const { generarYEnviarBoleto } = require("../utils/ticketGenerator");
 
 // 1. Obtener lista de todos los eventos (Público)
 async function findAll() {
@@ -47,39 +49,61 @@ async function findById(eventoId) {
 }
 
 // 3. Procesar la compra (Transacción)
-async function comprarBoletos(boletoId, cantidad) {
+async function comprarBoletos(usuarioId, boletoId, cantidad) {
   const connection = await pool.getConnection();
 
   try {
     await connection.beginTransaction();
 
+    // A. Verificar Inventario
     const [rows] = await connection.query(
-      "SELECT cantidad_total, cantidad_vendida FROM boletos WHERE id = ? FOR UPDATE",
+      "SELECT * FROM boletos WHERE id = ? FOR UPDATE",
       [boletoId]
     );
-
-    if (rows.length === 0) {
-      throw new Error("Boleto no encontrado.");
-    }
+    if (rows.length === 0) throw new Error("Boleto no encontrado.");
 
     const boleto = rows[0];
     const disponibles = boleto.cantidad_total - boleto.cantidad_vendida;
+    if (disponibles < cantidad) throw new Error("Inventario insuficiente.");
 
-    if (disponibles < cantidad) {
-      throw new Error(
-        `Inventario insuficiente. Solo quedan ${disponibles} boletos.`
-      );
-    }
-
+    // B. Actualizar Inventario
     const nuevaCantidadVendida = boleto.cantidad_vendida + cantidad;
     await connection.query(
       "UPDATE boletos SET cantidad_vendida = ? WHERE id = ?",
       [nuevaCantidadVendida, boletoId]
     );
 
-    await connection.commit();
+    // C. Registrar Compra
+    const total = Number(boleto.precio) * Number(cantidad);
+    const uuidUnico = uuidv4();
 
-    return { success: true, message: `Compra de ${cantidad} boletos exitosa.` };
+    await connection.query(
+      "INSERT INTO compras (usuario_id, boleto_id, cantidad, total, uuid_unico) VALUES (?, ?, ?, ?, ?)",
+      [usuarioId, boletoId, cantidad, total, uuidUnico]
+    );
+
+    // D. Obtener datos para el correo
+    const [userData] = await connection.query(
+      "SELECT nombre, email FROM usuarios WHERE id = ?",
+      [usuarioId]
+    );
+    const [eventoData] = await connection.query(
+      "SELECT nombre, fecha, lugar FROM eventos WHERE id = ?",
+      [boleto.evento_id]
+    );
+
+    const compraData = { uuid_unico: uuidUnico, cantidad, total };
+
+    // E. Enviar Correo (Sin bloquear la respuesta al usuario)
+    generarYEnviarBoleto(compraData, eventoData[0], userData[0], boleto).catch(
+      (err) => console.error("Error enviando correo:", err)
+    );
+
+    await connection.commit();
+    return {
+      success: true,
+      message: `Compra exitosa. Boletos enviados a ${userData[0].email}`,
+    };
   } catch (error) {
     await connection.rollback();
     throw error;

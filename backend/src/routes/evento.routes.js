@@ -21,7 +21,7 @@ router.get(
 );
 
 // POST /api/eventos/comprar - Procesar la compra de boletos (Cualquier usuario o visitante)
-router.post("/comprar", eventoController.postComprarBoletos);
+router.post("/comprar", protect, eventoController.postComprarBoletos);
 
 // GET /api/eventos - Obtener lista de todos los eventos
 router.get("/", eventoController.getEventos);
