@@ -4,7 +4,7 @@ const dbConfig = {
   USER: process.env.DB_USER || "root",
   PASSWORD: process.env.DB_PASSWORD || "1234",
   DB: process.env.DB_NAME || "poliEventos_db",
-  PORT: process.env.DB_PORT || 3306,
+  PORT: parseInt(process.env.DB_PORT) || 3306,
 };
 
 module.exports = dbConfig;
