@@ -8,6 +8,8 @@ import HomePage from "./pages/HomePage";
 import EventDetailPage from "./pages/EventDetailPage";
 import LoginPage from "./pages/LoginPage";
 import CreateEventPage from "./pages/CreateEventPage";
+import SellerDashboard from "./pages/SellerDashboard";
+import EditEventPage from "./pages/EditEventPage";
 
 // ==========================================
 //                 COMPONENTS
@@ -27,6 +29,9 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/create-event" element={<CreateEventPage />} />
+          {/*  Rutas del Vendedor  */}
+          <Route path="/dashboard" element={<SellerDashboard />} />
+          <Route path="/edit-event/:id" element={<EditEventPage />} />
           <Route
             path="*"
             element={

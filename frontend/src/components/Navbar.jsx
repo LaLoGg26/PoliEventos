@@ -1,42 +1,38 @@
 import { Link } from "react-router-dom";
-import { useAuth } from "../context/AuthContext"; // Importar el hook de autenticación
+import { useAuth } from "../context/AuthContext";
 
 function Navbar() {
-  // Obtener el estado y la función de logout del contexto
   const { isAuthenticated, user, logout } = useAuth();
-
-  const handleLogout = () => {
-    // Llama a la función de logout del contexto
-    logout();
-    // Opcional: Podrías usar navigate('/') aquí si quieres redirigir a la home después
-  };
 
   return (
     <nav style={styles.nav}>
-      {/* 1. Logo/Home */}
+      {/* Logo / Home */}
       <Link to="/" style={styles.logo}>
-        🎟️ Poli Eventos MVP
+        🎟️ PoliEventos MVP
       </Link>
 
       <div style={styles.linksContainer}>
         {isAuthenticated ? (
-          // 2. Si el usuario está autenticado
+          // SI EL USUARIO ESTÁ LOGUEADO
           <>
-            <span style={styles.welcome}>
+            {/* Saludo (con texto cortado si es muy largo) */}
+            <span style={styles.welcome} title={`Hola, ${user.nombre}`}>
               Hola, {user.nombre} ({user.rol})
             </span>
-            <button onClick={handleLogout} style={styles.logoutButton}>
-              Logout
-            </button>
-            {/* Opcional: Botón para crear evento, visible solo para VENDEDORES */}
+
+            {/* Botón Dashboard: Solo para Vendedores o Super Usuarios */}
             {(user.rol === "VENDEDOR" || user.rol === "SUPER_USER") && (
-              <Link to="/create-event" style={styles.createEventButton}>
-                Crear Evento
+              <Link to="/dashboard" style={styles.dashboardBtn}>
+                ⚙️ Mis Eventos
               </Link>
             )}
+
+            <button onClick={logout} style={styles.logoutButton}>
+              Logout
+            </button>
           </>
         ) : (
-          // 3. Si el usuario NO está autenticado
+          // SI EL USUARIO NO ESTÁ LOGUEADO
           <>
             <Link to="/login" style={styles.navLink}>
               Login
@@ -51,41 +47,35 @@ function Navbar() {
   );
 }
 
-// ... al final de frontend/src/components/Navbar.jsx
-
-// En frontend/src/components/Navbar.jsx
-
 const styles = {
   nav: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: "20px 20px", // Padding horizontal equilibrado
-    backgroundColor: "#333",
+    padding: "20px 20px", // Padding lateral seguro
+    backgroundColor: "#333", // Fondo oscuro
     color: "white",
-
-    // ⭐️ CORRECCIONES CLAVE ⭐️
     width: "100%",
-    boxSizing: "border-box", // 👈 ESTO SOLUCIONA EL DESBORDAMIENTO
-
+    boxSizing: "border-box", // ⭐️ CLAVE: Evita que la barra se salga de la pantalla
     minHeight: "3rem",
     position: "fixed",
     top: 0,
     left: 0,
     zIndex: 1000,
+    boxShadow: "0 2px 5px rgba(0,0,0,0.2)", // Sombra suave inferior
   },
   logo: {
     color: "white",
     textDecoration: "none",
-    fontSize: "2rem", // Un poco más pequeño para que no empuje tanto
+    fontSize: "2rem",
     fontWeight: "bold",
     whiteSpace: "nowrap",
   },
   linksContainer: {
     display: "flex",
     alignItems: "center",
-    gap: "20px",
-    flexShrink: 0, // Evita que se aplaste
+    gap: "15px",
+    flexShrink: 0,
   },
   navLink: {
     color: "white",
@@ -93,32 +83,42 @@ const styles = {
     padding: "8px 12px",
     borderRadius: "4px",
     transition: "background-color 0.3s",
+    fontSize: "0.9rem",
   },
   welcome: {
-    marginRight: "10px",
+    marginRight: "5px",
     color: "#ccc",
-    fontSize: "0.9rem", // Texto un poco más pequeño para ganar espacio
+    fontSize: "0.85rem",
     whiteSpace: "nowrap",
+    maxWidth: "200px", // Limita el ancho si el nombre es muy largo
     overflow: "hidden",
     textOverflow: "ellipsis",
-    maxWidth: "300px", // Si el nombre es larguísimo, pondrá "..."
+    display: "inline-block",
+    verticalAlign: "middle",
+    cursor: "default",
   },
-  logoutButton: {
-    backgroundColor: "#dc3545",
-    color: "white",
-    border: "none",
-    padding: "8px 15px",
-    borderRadius: "4px",
-    cursor: "pointer",
-    whiteSpace: "nowrap", // Asegura que el texto del botón no se rompa
-  },
-  createEventButton: {
-    backgroundColor: "#28a745",
+  // Estilo para el botón del Dashboard (Gestión)
+  dashboardBtn: {
+    backgroundColor: "#F59E0B", // Color ámbar para diferenciar gestión
     color: "white",
     textDecoration: "none",
-    padding: "8px 15px",
+    padding: "6px 12px",
     borderRadius: "4px",
+    fontSize: "0.85rem",
+    fontWeight: "bold",
     whiteSpace: "nowrap",
   },
+  logoutButton: {
+    backgroundColor: "#dc3545", // Rojo
+    color: "white",
+    border: "none",
+    padding: "6px 12px",
+    borderRadius: "4px",
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    fontSize: "0.85rem",
+    fontWeight: "bold",
+  },
 };
+
 export default Navbar;

@@ -12,14 +12,33 @@ const {
 // 1. RUTAS PÚBLICAS (COMPRADORES Y VISITANTES)
 // ==========================================
 
+// Ver mis eventos (Dashboard)
+router.get(
+  "/dashboard/mis-eventos",
+  protect,
+  checkSubscription,
+  eventoController.getDashboardEvents
+);
+
+// POST /api/eventos/comprar - Procesar la compra de boletos (Cualquier usuario o visitante)
+router.post("/comprar", eventoController.postComprarBoletos);
+
 // GET /api/eventos - Obtener lista de todos los eventos
 router.get("/", eventoController.getEventos);
 
 // GET /api/eventos/:id - Obtener detalle de un evento específico
 router.get("/:id", eventoController.getEventoById);
 
-// POST /api/eventos/comprar - Procesar la compra de boletos (Cualquier usuario o visitante)
-router.post("/comprar", eventoController.postComprarBoletos);
+// Eliminar evento (Dueño o Admin)
+router.delete(
+  "/:id",
+  protect,
+  checkSubscription,
+  eventoController.deleteEvento
+);
+
+// Editar evento (Dueño o Admin)
+router.put("/:id", protect, checkSubscription, eventoController.updateEvento);
 
 // ======================================================
 // 2. RUTA PROTEGIDA (VENDEDORES CON SUSCRIPCIÓN ACTIVA)

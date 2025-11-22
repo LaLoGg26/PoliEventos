@@ -85,9 +85,56 @@ async function postCreateEvento(req, res) {
   }
 }
 
+// ... (imports y funciones anteriores)
+
+// GET /api/eventos/dashboard/mis-eventos
+async function getDashboardEvents(req, res) {
+  try {
+    const eventos = await eventoService.getEventsForDashboard(
+      req.user.id,
+      req.user.rol
+    );
+    res.json(eventos);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+}
+
+// DELETE /api/eventos/:id
+async function deleteEvento(req, res) {
+  const { id } = req.params;
+  try {
+    await eventoService.deleteEvento(id, req.user.id, req.user.rol);
+    res.json({ message: "Evento eliminado correctamente." });
+  } catch (error) {
+    res.status(403).json({ message: error.message });
+  }
+}
+
+// PUT /api/eventos/:id
+async function updateEvento(req, res) {
+  const { id } = req.params;
+  try {
+    // req.body trae { nombre, descripcion, ... }
+    const updated = await eventoService.updateEvento(
+      id,
+      req.user.id,
+      req.user.rol,
+      req.body
+    );
+    res.json({ message: "Evento actualizado.", evento: updated });
+  } catch (error) {
+    res.status(403).json({ message: error.message });
+  }
+}
+
+// ACTUALIZA EL EXPORT:
 module.exports = {
   getEventos,
   getEventoById,
   postComprarBoletos,
   postCreateEvento,
+  getDashboardEvents, // Nuevo
+  deleteEvento, // Nuevo
+  updateEvento, // Nuevo
 };

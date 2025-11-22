@@ -1,12 +1,17 @@
-import { useState } from "react";
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
+import { useEffect } from "react";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  useMapEvents,
+  useMap,
+} from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-
-// --- Fix para el ícono de Leaflet en React ---
 import L from "leaflet";
 import icon from "leaflet/dist/images/marker-icon.png";
 import iconShadow from "leaflet/dist/images/marker-shadow.png";
 
+// Fix para el ícono de Leaflet
 let DefaultIcon = L.icon({
   iconUrl: icon,
   shadowUrl: iconShadow,
@@ -14,24 +19,36 @@ let DefaultIcon = L.icon({
   iconAnchor: [12, 41],
 });
 L.Marker.prototype.options.icon = DefaultIcon;
-// ---------------------------------------------
 
-function LocationMarker({ onLocationSelect }) {
-  const [position, setPosition] = useState(null);
+// Este componente mueve la cámara del mapa cuando cambian las coordenadas
+function MapUpdater({ position }) {
+  const map = useMap();
+  useEffect(() => {
+    if (position) {
+      map.setView(position, 13);
+    }
+  }, [position, map]); // Solo se mueve si la 'position' que viene del padre cambia
+  return null;
+}
 
+// Este componente detecta los clics y avisa al padre
+function LocationMarker({ position, onLocationSelect }) {
   useMapEvents({
     click(e) {
-      setPosition(e.latlng);
-      onLocationSelect(e.latlng); // Enviar coordenadas al padre
+      // Al hacer clic, NO guardamos estado aquí.
+      // Solo le avisamos al padre: "Oye, el usuario quiere esta ubicación"
+      onLocationSelect(e.latlng);
     },
   });
-
+  // Renderiza el marcador donde diga el padre (position)
   return position === null ? null : <Marker position={position}></Marker>;
 }
 
-function LocationPicker({ onLocationSelect }) {
-  // Coordenadas iniciales (Centro de México por defecto, puedes cambiarlo)
+function LocationPicker({ onLocationSelect, initialPosition }) {
   const defaultCenter = [19.4326, -99.1332];
+
+  // NOTA: Ya no hay useState ni useEffect aquí.
+  // Confiamos ciegamente en 'initialPosition' que viene desde EditEventPage.
 
   return (
     <div
@@ -50,9 +67,16 @@ function LocationPicker({ onLocationSelect }) {
       >
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution="&copy; OpenStreetMap contributors"
+          attribution="&copy; OpenStreetMap"
         />
-        <LocationMarker onLocationSelect={onLocationSelect} />
+
+        {/* Componentes controlados por las props */}
+        <MapUpdater position={initialPosition} />
+
+        <LocationMarker
+          position={initialPosition}
+          onLocationSelect={onLocationSelect}
+        />
       </MapContainer>
     </div>
   );

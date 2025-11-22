@@ -131,41 +131,45 @@ function EventDetailPage() {
             </div>
           )}
           <div style={styles.ticketsList}>
-            {evento.boletos.map((boleto) => (
-              <div key={boleto.id} style={styles.ticketCard}>
-                <div style={styles.ticketInfo}>
-                  <span style={styles.zoneName}>{boleto.zona}</span>
-                  <span style={styles.availability}>
-                    {boleto.disponibles > 0
-                      ? `${boleto.disponibles} disp.`
-                      : "AGOTADO"}
-                  </span>
+            {evento.boletos
+              .filter((boleto) => boleto.activo === 1 || boleto.activo === true)
+              .map((boleto) => (
+                <div key={boleto.id} style={styles.ticketCard}>
+                  <div style={styles.ticketInfo}>
+                    <span style={styles.zoneName}>{boleto.zona}</span>
+                    <span style={styles.availability}>
+                      {boleto.disponibles > 0
+                        ? `${boleto.disponibles} disp.`
+                        : "AGOTADO"}
+                    </span>
+                  </div>
+                  <div style={styles.priceTag}>${boleto.precio.toFixed(2)}</div>
+                  <div style={styles.buyActions}>
+                    <input
+                      type="number"
+                      min="1"
+                      max={boleto.disponibles}
+                      value={cantidad}
+                      onChange={(e) =>
+                        setCantidad(Math.max(1, parseInt(e.target.value) || 1))
+                      }
+                      style={styles.qtyInput}
+                      disabled={boleto.disponibles <= 0}
+                    />
+                    <button
+                      onClick={() => handleComprar(boleto.id)}
+                      disabled={boleto.disponibles <= 0}
+                      style={
+                        boleto.disponibles > 0
+                          ? styles.buyBtn
+                          : styles.soldOutBtn
+                      }
+                    >
+                      {boleto.disponibles > 0 ? "Comprar" : "Agotado"}
+                    </button>
+                  </div>
                 </div>
-                <div style={styles.priceTag}>${boleto.precio.toFixed(2)}</div>
-                <div style={styles.buyActions}>
-                  <input
-                    type="number"
-                    min="1"
-                    max={boleto.disponibles}
-                    value={cantidad}
-                    onChange={(e) =>
-                      setCantidad(Math.max(1, parseInt(e.target.value) || 1))
-                    }
-                    style={styles.qtyInput}
-                    disabled={boleto.disponibles <= 0}
-                  />
-                  <button
-                    onClick={() => handleComprar(boleto.id)}
-                    disabled={boleto.disponibles <= 0}
-                    style={
-                      boleto.disponibles > 0 ? styles.buyBtn : styles.soldOutBtn
-                    }
-                  >
-                    {boleto.disponibles > 0 ? "Comprar" : "Agotado"}
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))}
           </div>
         </div>
       </div>
