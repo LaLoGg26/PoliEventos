@@ -20,12 +20,14 @@ async function generarYEnviarBoleto(
   datosCompra
 ) {
   return new Promise(async (resolve, reject) => {
+    console.log("1. Iniciando generacion de PDF...");
     try {
       const doc = new PDFDocument({ size: "A4", margin: 0 }); // Margen 0 para el banner full width
       const buffers = [];
 
       doc.on("data", buffers.push.bind(buffers));
       doc.on("end", async () => {
+        console.log("2. PDF Generado. Intentando enviar correo..."); // 👈 LOG NUEVO
         const pdfData = Buffer.concat(buffers);
         try {
           await transporter.sendMail({
@@ -35,9 +37,11 @@ async function generarYEnviarBoleto(
             html: `<h1>¡Hola ${usuario.nombre}!</h1><p>Aquí tienes tus entradas.</p>`,
             attachments: [{ filename: "Boletos.pdf", content: pdfData }],
           });
+          console.log(`3. ¡ÉXITO! Correo enviado a ${usuario.email}`); // 👈 LOG CLAVE
           resolve(true);
         } catch (error) {
           console.error("Error enviando email:", error);
+          console.error("4. ERROR en sendMail:", error); // 👈 LOG DE ERROR
           reject(error);
         }
       });
@@ -142,7 +146,7 @@ async function generarYEnviarBoleto(
             { align: "center" }
           );
       }
-
+      console.log("1.5. Dibujando boleto..."); // 👈 LOG NUEVO
       doc.end();
     } catch (error) {
       reject(error);
