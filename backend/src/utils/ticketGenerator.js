@@ -8,15 +8,18 @@ console.log("Pass:", process.env.EMAIL_PASS ? "Definido" : "NO DEFINIDO");
 
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
+  port: 587,
+  secure: false, // true para 465, false para otros puertos
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
-
-  logger: true,
-  debug: true,
+  // ⭐️ AQUÍ ESTÁ EL TRUCO ⭐️
+  family: 4, // Fuerza a usar IPv4
+  tls: {
+    rejectUnauthorized: false, // Ayuda si hay proxys intermedios
+    ciphers: "SSLv3",
+  },
 });
 
 async function generarYEnviarBoleto(
