@@ -7,20 +7,17 @@ console.log("User:", process.env.EMAIL_USER ? "Definido" : "NO DEFINIDO");
 console.log("Pass:", process.env.EMAIL_PASS ? "Definido" : "NO DEFINIDO");
 
 const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
+  host: "smtp-relay.brevo.com", // 👈 CAMBIO CLAVE: Servidor de Brevo
+  port: 587, // Puerto estándar de Brevo
+  secure: false, // false para 587
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    user: process.env.EMAIL_USER, // Tu correo
+    pass: process.env.EMAIL_PASS, // Tu clave de Brevo
   },
-  // ⭐️ LA SOLUCIÓN MÁGICA PARA RENDER ⭐️
-  pool: true, // Usa conexiones reutilizables (más estable)
-  maxConnections: 1, // Solo abre 1 tubo a la vez (Google prefiere esto)
-  rateLimit: 1, // Envía lento para no ser detectado como spam
-  tls: {
-    rejectUnauthorized: false, // Permite certificados flexibles
-  },
+  // Configuraciones de estabilidad
+  pool: true,
+  maxConnections: 1,
+  rateLimit: 1,
 });
 
 async function generarYEnviarBoleto(
