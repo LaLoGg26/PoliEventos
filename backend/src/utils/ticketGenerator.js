@@ -3,7 +3,7 @@ const QRCode = require("qrcode");
 const nodemailer = require("nodemailer");
 
 const transporter = nodemailer.createTransport({
-  host: "smtm.gmail.com",
+  host: "smtp.gmail.com",
   port: 465,
   secure: true,
   auth: {
