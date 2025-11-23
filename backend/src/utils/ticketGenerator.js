@@ -2,12 +2,21 @@ const PDFDocument = require("pdfkit");
 const QRCode = require("qrcode");
 const nodemailer = require("nodemailer");
 
+console.log("Intentando configurar correo con:");
+console.log("User:", process.env.EMAIL_USER ? "Definido" : "NO DEFINIDO");
+console.log("Pass:", process.env.EMAIL_PASS ? "Definido" : "NO DEFINIDO");
+
 const transporter = nodemailer.createTransport({
-  sevice: "gmail",
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
+
+  logger: true,
+  debug: true,
 });
 
 async function generarYEnviarBoleto(
@@ -18,16 +27,20 @@ async function generarYEnviarBoleto(
   datosCompra
 ) {
   return new Promise(async (resolve, reject) => {
-    console.log("1. Iniciando generacion de PDF...");
     try {
-      const doc = new PDFDocument({ size: "A4", margin: 0 }); // Margen 0 para el banner full width
+      // Verificación previa
+      if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+        throw new Error("Faltan credenciales de correo en el servidor.");
+      }
+
+      const doc = new PDFDocument({ size: "A4", margin: 0 });
       const buffers = [];
 
       doc.on("data", buffers.push.bind(buffers));
       doc.on("end", async () => {
-        console.log("2. PDF Generado. Intentando enviar correo..."); // 👈 LOG NUEVO
         const pdfData = Buffer.concat(buffers);
         try {
+          console.log("Enviando correo a:", usuario.email);
           await transporter.sendMail({
             from: `"Poli Eventos" <${process.env.EMAIL_USER}>`,
             to: usuario.email,
@@ -35,15 +48,13 @@ async function generarYEnviarBoleto(
             html: `<h1>¡Hola ${usuario.nombre}!</h1><p>Aquí tienes tus entradas.</p>`,
             attachments: [{ filename: "Boletos.pdf", content: pdfData }],
           });
-          console.log(`3. ¡ÉXITO! Correo enviado a ${usuario.email}`); // 👈 LOG CLAVE
+          console.log("✅ Correo enviado con éxito");
           resolve(true);
         } catch (error) {
-          console.error("Error enviando email:", error);
-          console.error("4. ERROR en sendMail:", error); // 👈 LOG DE ERROR
+          console.error("❌ Error en transporter.sendMail:", error);
           reject(error);
         }
       });
-
       // --- COLORES Y ESTILOS ---
       const primaryColor = "#2563EB"; // Azul bonito
       const grayColor = "#444444";
