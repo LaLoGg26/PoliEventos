@@ -1,6 +1,7 @@
 const { pool } = require("../config/db.connector");
 const { v4: uuidv4 } = require("uuid"); // Importar UUID
 const { generarYEnviarBoleto } = require("../utils/ticketGenerator");
+const bcrypt = require("bcrypt");
 
 // 1. Obtener lista de todos los eventos (Público)
 async function findAll() {
@@ -209,20 +210,41 @@ async function getEventsForDashboard(userId, userRole) {
   return rows;
 }
 
-// 6. Eliminar Evento (Validación de Dueño)
-async function deleteEvento(eventoId, userId, userRole) {
-  // Verificar permisos primero
-  let checkQuery = "SELECT usuario_id FROM eventos WHERE id = ?";
-  const [rows] = await pool.query(checkQuery, [eventoId]);
+// 6. Eliminar Evento (CON VERIFICACIÓN DE CONTRASEÑA)
+async function deleteEvento(eventoId, userId, userRole, password) {
+  const connection = await pool.getConnection();
+  try {
+    // 1. Obtener la contraseña encriptada del usuario
+    const [users] = await connection.query(
+      "SELECT password FROM usuarios WHERE id = ?",
+      [userId]
+    );
+    if (users.length === 0) throw new Error("Usuario no encontrado.");
 
-  if (rows.length === 0) throw new Error("Evento no encontrado.");
+    const userHash = users[0].password;
 
-  if (userRole !== "SUPER_USER" && rows[0].usuario_id !== userId) {
-    throw new Error("No tienes permiso para eliminar este evento.");
+    // 2. Verificar que la contraseña proporcionada coincida
+    const isMatch = await bcrypt.compare(password, userHash);
+    if (!isMatch) {
+      throw new Error("Contraseña incorrecta. No se pudo eliminar el evento.");
+    }
+
+    // 3. Verificar propiedad del evento
+    let checkQuery = "SELECT usuario_id FROM eventos WHERE id = ?";
+    const [rows] = await connection.query(checkQuery, [eventoId]);
+
+    if (rows.length === 0) throw new Error("Evento no encontrado.");
+
+    if (userRole !== "SUPER_USER" && rows[0].usuario_id !== userId) {
+      throw new Error("No tienes permiso para eliminar este evento.");
+    }
+
+    // 4. Borrar
+    await connection.query("DELETE FROM eventos WHERE id = ?", [eventoId]);
+    return true;
+  } finally {
+    connection.release();
   }
-
-  await pool.query("DELETE FROM eventos WHERE id = ?", [eventoId]);
-  return true;
 }
 
 // 7. Actualizar Evento (Datos + Boletos Híbridos)

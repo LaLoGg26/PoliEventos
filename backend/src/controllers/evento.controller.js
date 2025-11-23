@@ -114,11 +114,21 @@ async function getDashboardEvents(req, res) {
 // DELETE /api/eventos/:id
 async function deleteEvento(req, res) {
   const { id } = req.params;
+  const { password } = req.body; // 👈 Recibimos la contraseña
+
+  if (!password) {
+    return res
+      .status(400)
+      .json({ message: "Se requiere contraseña para confirmar." });
+  }
+
   try {
-    await eventoService.deleteEvento(id, req.user.id, req.user.rol);
+    // Pasamos la password al servicio
+    await eventoService.deleteEvento(id, req.user.id, req.user.rol, password);
     res.json({ message: "Evento eliminado correctamente." });
   } catch (error) {
-    res.status(403).json({ message: error.message });
+    // Si es error de contraseña, solemos devolver 401 o 403, o 400 genérico
+    res.status(400).json({ message: error.message });
   }
 }
 
