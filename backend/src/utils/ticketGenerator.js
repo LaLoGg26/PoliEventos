@@ -8,17 +8,18 @@ console.log("Pass:", process.env.EMAIL_PASS ? "Definido" : "NO DEFINIDO");
 
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
-  port: 587,
-  secure: false, // true para 465, false para otros puertos
+  port: 465,
+  secure: true,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
-  // ⭐️ AQUÍ ESTÁ EL TRUCO ⭐️
-  family: 4, // Fuerza a usar IPv4
+  // ⭐️ LA SOLUCIÓN MÁGICA PARA RENDER ⭐️
+  pool: true, // Usa conexiones reutilizables (más estable)
+  maxConnections: 1, // Solo abre 1 tubo a la vez (Google prefiere esto)
+  rateLimit: 1, // Envía lento para no ser detectado como spam
   tls: {
-    rejectUnauthorized: false, // Ayuda si hay proxys intermedios
-    ciphers: "SSLv3",
+    rejectUnauthorized: false, // Permite certificados flexibles
   },
 });
 
