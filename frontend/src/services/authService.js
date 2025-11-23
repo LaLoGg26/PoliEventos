@@ -1,8 +1,6 @@
-const API_URL = "http://localhost:3001/api/auth";
+const API_URL =
+  (import.meta.env.VITE_API_URL || "http://localhost:3001") + "/api/auth";
 
-/**
- * Llama a la API para registrar un nuevo usuario.
- */
 export async function registerAPI(nombre, email, password) {
   const response = await fetch(`${API_URL}/register`, {
     method: "POST",

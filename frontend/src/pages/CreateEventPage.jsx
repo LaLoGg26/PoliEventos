@@ -3,7 +3,8 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import LocationPicker from "../components/LocationPicker";
 
-const API_URL = "http://localhost:3001/api/eventos";
+const API_URL =
+  (import.meta.env.VITE_API_URL || "http://localhost:3001") + "/api/eventos";
 
 function CreateEventPage() {
   const { user, token } = useAuth();
