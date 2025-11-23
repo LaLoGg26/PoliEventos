@@ -3,7 +3,7 @@ const API_URL =
 
 export async function getEventos() {
   try {
-    const response = await fetch(`${API_URL}/eventos`);
+    const response = await fetch(API_URL);
     if (!response.ok) {
       throw new Error(`Error en la petición: ${response.statusText}`);
     }
@@ -16,7 +16,7 @@ export async function getEventos() {
 
 export async function getEventoById(id) {
   try {
-    const response = await fetch(`${API_URL}/eventos/${id}`);
+    const response = await fetch(`${API_URL}/${id}`);
 
     if (!response.ok) {
       throw new Error(`Error al cargar el evento: ${response.statusText}`);
@@ -31,7 +31,7 @@ export async function getEventoById(id) {
 
 export async function comprarBoletosAPI(boletoId, cantidad, token) {
   // 1. Agregamos 'token' aquí
-  const response = await fetch(`${API_URL}/eventos/comprar`, {
+  const response = await fetch(`${API_URL}/comprar`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
