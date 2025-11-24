@@ -36,7 +36,7 @@ function ProfilePage() {
     if (file) formData.append("avatar", file);
 
     try {
-      const res = await fetch(`${API_URL}/api/auth/profile/avatar`, {
+      const res = await fetch(`${API_URL}/profile`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
