@@ -4,9 +4,9 @@ const nodemailer = require("nodemailer");
 
 // Configuración robusta para Gmail en la nube (Render)
 const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true, // true para 465
+  host: "smtp-relay.brevo.com",
+  port: 587,
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -14,7 +14,7 @@ const transporter = nodemailer.createTransport({
   // ⭐️ CONFIGURACIÓN CRÍTICA PARA RENDER ⭐️
   pool: true, // Reutilizar conexiones
   maxConnections: 1, // No saturar a Google
-  family: 4, // Forzar IPv4 (evita errores ETIMEDOUT en la nube)
+  rateLimit: 4, // Forzar IPv4 (evita errores ETIMEDOUT en la nube)
 });
 
 async function generarYEnviarBoleto(
