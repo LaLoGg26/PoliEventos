@@ -68,4 +68,12 @@ router.put(
   eventoController.updateEvento
 );
 
+// 10. Validar ticket
+router.post(
+  "/ticket/validar",
+  protect,
+  checkSubscription,
+  eventoController.postValidarTicket
+);
+
 module.exports = router;

@@ -426,6 +426,61 @@ async function reenviarCorreoCompra(compraId, userId) {
   };
 }
 
+// 10. Validar Ticket (Scanner)
+async function validarTicket(uuid, userId, userRole) {
+  const connection = await pool.getConnection();
+  try {
+    // 1. Buscar el ticket y datos del evento/dueño
+    const query = `
+            SELECT 
+                t.id, t.estado, t.uuid_unico,
+                e.nombre as evento_nombre, 
+                e.usuario_id as creador_id,
+                b.nombre_zona
+            FROM tickets t
+            JOIN compras c ON t.compra_id = c.id
+            JOIN boletos b ON c.boleto_id = b.id
+            JOIN eventos e ON b.evento_id = e.id
+            WHERE t.uuid_unico = ?
+        `;
+    const [rows] = await connection.query(query, [uuid]);
+
+    if (rows.length === 0) {
+      throw new Error("Ticket NO VÁLIDO (No existe en el sistema).");
+    }
+
+    const ticket = rows[0];
+
+    // 2. Verificar Permisos (Seguridad)
+    // Si NO es Super Usuario Y el creador del evento NO es el usuario actual -> Bloquear
+    if (userRole !== "SUPER_USER" && ticket.creador_id !== userId) {
+      throw new Error("⛔ Este ticket no pertenece a tus eventos.");
+    }
+
+    // 3. Verificar Estado
+    if (ticket.estado === "USADO") {
+      return {
+        valid: false,
+        message: "Ticket YA USADO anteriormente.",
+        data: ticket,
+      };
+    }
+
+    // 4. Si es válido, marcar como USADO
+    await connection.query('UPDATE tickets SET estado = "USADO" WHERE id = ?', [
+      ticket.id,
+    ]);
+
+    return {
+      valid: true,
+      message: "✅ ACCESO CONCEDIDO",
+      data: ticket,
+    };
+  } finally {
+    connection.release();
+  }
+}
+
 module.exports = {
   findAll,
   findById,
@@ -436,4 +491,5 @@ module.exports = {
   updateEvento,
   getHistorialCompras,
   reenviarCorreoCompra,
+  validarTicket,
 };

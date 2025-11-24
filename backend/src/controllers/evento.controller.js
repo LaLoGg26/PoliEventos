@@ -194,6 +194,26 @@ async function postReenviarCorreo(req, res) {
   }
 }
 
+async function postValidarTicket(req, res) {
+  const { uuid } = req.body;
+  if (!uuid)
+    return res.status(400).json({ message: "Falta el código del ticket." });
+
+  try {
+    const resultado = await eventoService.validarTicket(
+      uuid,
+      req.user.id,
+      req.user.rol
+    );
+
+    // Si es válido o usado, respondemos 200 pero con el status dentro
+    res.json(resultado);
+  } catch (error) {
+    // Si es error de permiso o no existe
+    res.status(400).json({ message: error.message, valid: false });
+  }
+}
+
 module.exports = {
   getEventos,
   getEventoById,
@@ -204,4 +224,5 @@ module.exports = {
   updateEvento,
   getMisTickets,
   postReenviarCorreo,
+  postValidarTicket,
 };
