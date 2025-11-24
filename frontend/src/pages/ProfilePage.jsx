@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 
-const API_URL =
-  (import.meta.env.VITE_API_URL || "http://localhost:3001") + "/api/eventos";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
 function ProfilePage() {
   const { user, token, updateLocalUser } = useAuth();
@@ -37,7 +36,7 @@ function ProfilePage() {
     if (file) formData.append("avatar", file);
 
     try {
-      const res = await fetch(`${API_URL}/profile`, {
+      const res = await fetch(`${API_URL}/api/auth/profile/avatar`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
