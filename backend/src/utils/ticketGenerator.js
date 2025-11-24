@@ -5,10 +5,10 @@ const nodemailer = require("nodemailer");
 // Configuración BREVO (Sendinblue) Definitiva
 const transporter = nodemailer.createTransport({
   host: "smtp-relay.brevo.com",
-  port: 587, // Puerto estándar TLS
-  secure: false, // false para 587 (STARTTLS)
+  port: 465,
+  secure: true, // true para 465
   auth: {
-    user: process.env.SMTP_LOGIN || process.env.EMAIL_USER, // Login de Brevo
+    user: process.env.EMAIL_USER, // Login de Brevo
     pass: process.env.EMAIL_PASS, // Clave SMTP
   },
   // ⭐️ CONFIGURACIÓN DE RED CRÍTICA ⭐️
@@ -19,6 +19,10 @@ const transporter = nodemailer.createTransport({
   tls: {
     rejectUnauthorized: false, // Permite certificados flexibles
   },
+  // ⭐️ CONFIGURACIÓN CRÍTICA PARA RENDER ⭐️
+  pool: true, // Reutilizar conexiones
+  maxConnections: 1, // No saturar a Google
+  family: 4, // Forzar IPv4 (evita errores ETIMEDOUT en la nube)
 });
 
 async function generarYEnviarBoleto(
