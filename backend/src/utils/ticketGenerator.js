@@ -2,20 +2,23 @@ const PDFDocument = require("pdfkit");
 const QRCode = require("qrcode");
 const nodemailer = require("nodemailer");
 
-// Configuración BREVO
+// Configuración BREVO (Sendinblue) Definitiva
 const transporter = nodemailer.createTransport({
   host: "smtp-relay.brevo.com",
-  port: 587, // Probamos el estándar primero, si falla volvemos al 2525
-  secure: false,
+  port: 587, // Puerto estándar TLS
+  secure: false, // false para 587 (STARTTLS)
   auth: {
-    // ⭐️ AQUÍ EL CAMBIO: Usamos la nueva variable para el LOGIN
-    user: process.env.SMTP_LOGIN || process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    user: process.env.SMTP_LOGIN || process.env.EMAIL_USER, // Login de Brevo
+    pass: process.env.EMAIL_PASS, // Clave SMTP
   },
-  pool: true,
-  maxConnections: 1,
-  rateLimit: 1,
-  family: 4,
+  // ⭐️ CONFIGURACIÓN DE RED CRÍTICA ⭐️
+  family: 4, // Forzar IPv4 (Evita ETIMEDOUT en Render)
+  pool: true, // Mantiene la conexión viva
+  maxConnections: 2, // Pocas conexiones simultáneas
+  rateLimit: 2, // Límite de velocidad suave
+  tls: {
+    rejectUnauthorized: false, // Permite certificados flexibles
+  },
 });
 
 async function generarYEnviarBoleto(
@@ -27,7 +30,7 @@ async function generarYEnviarBoleto(
 ) {
   return new Promise(async (resolve, reject) => {
     try {
-      // Validación básica
+      // Validación de seguridad
       if (!process.env.EMAIL_PASS) {
         console.error("❌ Faltan credenciales de correo.");
         return resolve(false);
@@ -40,19 +43,17 @@ async function generarYEnviarBoleto(
       doc.on("end", async () => {
         const pdfData = Buffer.concat(buffers);
         try {
-          console.log(`📧 Enviando desde: ${process.env.EMAIL_USER}`);
-          console.log(`📧 Para: ${usuario.email}`);
+          console.log(`📧 Conectando a Brevo para enviar a: ${usuario.email}`);
 
           await transporter.sendMail({
-            // ⭐️ AQUÍ EL REMITENTE: Usamos el correo bonito (Gmail)
-            from: `"Poli Eventos" <${process.env.EMAIL_USER}>`,
+            from: `"Poli Eventos" <${process.env.EMAIL_USER}>`, // Remitente (Tu Gmail)
             to: usuario.email,
             subject: `🎟️ Tus boletos para: ${evento.nombre}`,
             html: `
                             <div style="font-family: Arial, sans-serif; color: #333;">
                                 <h1>¡Hola ${usuario.nombre}!</h1>
                                 <p>Gracias por tu compra. Aquí tienes tus entradas para <strong>${evento.nombre}</strong>.</p>
-                                <p>Adjunto encontrarás un archivo PDF con tus boletos.</p>
+                                <p>Adjunto encontrarás el PDF con tus boletos.</p>
                             </div>
                         `,
             attachments: [{ filename: "Boletos.pdf", content: pdfData }],
@@ -62,11 +63,12 @@ async function generarYEnviarBoleto(
           resolve(true);
         } catch (error) {
           console.error("❌ Error enviando email:", error);
+          // No rechazamos para no romper el flujo de compra
           resolve(false);
         }
       });
 
-      // --- DISEÑO DEL PDF (Igual que antes) ---
+      // --- DISEÑO DEL PDF ---
       const primaryColor = "#2563EB";
       const grayColor = "#444444";
 
