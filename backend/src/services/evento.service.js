@@ -301,7 +301,7 @@ async function reenviarCorreoCompra(compraId, userId) {
   return { success: true, message: `Correo reenviado a ${info.usuario_email}` };
 }
 
-// 10. Validar Ticket (Scanner) - ⭐️ NUEVA FUNCIÓN ⭐️
+// 10. Validar Ticket (Scanner) - ⭐️ CORREGIDO ⭐️
 async function validarTicket(uuid, userId, userRole) {
   const connection = await pool.getConnection();
   try {
@@ -329,9 +329,11 @@ async function validarTicket(uuid, userId, userRole) {
       };
     }
 
-    await connection.query('UPDATE tickets SET estado = "USADO" WHERE id = ?', [
+    // 🛠️ CORRECCIÓN AQUÍ: Comillas simples para el string 'USADO'
+    await connection.query("UPDATE tickets SET estado = 'USADO' WHERE id = ?", [
       ticket.id,
     ]);
+
     return { valid: true, message: "✅ ACCESO CONCEDIDO", data: ticket };
   } finally {
     connection.release();
