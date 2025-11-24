@@ -3,7 +3,8 @@ import { Html5QrcodeScanner } from "html5-qrcode";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 
-const API_URL = "http://localhost:3001/api/eventos"; // Ajusta a VITE_API_URL en producción
+const API_URL =
+  (import.meta.env.VITE_API_URL || "http://localhost:3001") + "/api/eventos";
 
 function ScannerPage() {
   const { user, token } = useAuth();
