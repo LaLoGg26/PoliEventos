@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-const API_URL = "http://localhost:3001/api/eventos"; // Ajusta esto a tu VITE_API_URL si estás en producción
+const API_URL =
+  (import.meta.env.VITE_API_URL || "http://localhost:3001") + "/api/eventos";
 
 function SellerDashboard() {
   const { user, token } = useAuth();

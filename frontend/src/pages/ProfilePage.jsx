@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 
-const API_URL = "http://localhost:3001/api/auth"; // Ajusta si usas variable de entorno
+const API_URL =
+  (import.meta.env.VITE_API_URL || "http://localhost:3001") + "/api/eventos";
 
 function ProfilePage() {
   const { user, token, updateLocalUser } = useAuth();
