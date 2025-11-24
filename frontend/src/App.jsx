@@ -19,6 +19,7 @@ import MyTicketsPage from "./pages/MyTicketPage";
 import RegisterPage from "./pages/RegisterPage";
 import Navbar from "./components/Navbar";
 import ProfilePage from "./pages/ProfilePage";
+import ScannerPage from "./pages/ScannerPage";
 
 function App() {
   return (
@@ -36,6 +37,7 @@ function App() {
           <Route path="/edit-event/:id" element={<EditEventPage />} />
           <Route path="/mis-tickets" element={<MyTicketsPage />} />
           <Route path="/perfil" element={<ProfilePage />} />
+          <Route path="/scanner" element={<ScannerPage />} />
           <Route
             path="*"
             element={
