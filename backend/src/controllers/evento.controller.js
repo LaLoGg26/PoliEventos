@@ -1,54 +1,36 @@
 const eventoService = require("../services/evento.service");
 
-// GET /api/eventos
 async function getEventos(req, res) {
   try {
-    const eventos = await eventoService.findAll();
-    res.json(eventos);
+    res.json(await eventoService.findAll());
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 }
 
-// GET /api/eventos/:id
 async function getEventoById(req, res) {
   const { id } = req.params;
   try {
     const evento = await eventoService.findById(id);
-    if (!evento) {
+    if (!evento)
       return res.status(404).json({ message: "Evento no encontrado" });
-    }
     res.json(evento);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 }
 
-// POST /api/eventos/comprar
 async function postComprarBoletos(req, res) {
   const { boletoId, cantidad } = req.body;
-
-  // Verificar que el usuario esté logueado
-  if (!req.user || !req.user.id) {
-    return res
-      .status(401)
-      .json({ message: "Debes iniciar sesión para comprar." });
-  }
-
-  const usuarioId = req.user.id;
-
-  if (!boletoId || !cantidad || cantidad <= 0) {
+  if (!req.user || !req.user.id)
+    return res.status(401).json({ message: "Debes iniciar sesión." });
+  if (!boletoId || !cantidad || cantidad <= 0)
     return res.status(400).json({ message: "Datos inválidos." });
-  }
 
   try {
-    // Pasamos usuarioId como primer parámetro
-    const result = await eventoService.comprarBoletos(
-      usuarioId,
-      boletoId,
-      cantidad
+    res.json(
+      await eventoService.comprarBoletos(req.user.id, boletoId, cantidad)
     );
-    res.json(result);
   } catch (error) {
     if (error.message.includes("Inventario"))
       return res.status(409).json({ message: error.message });
@@ -56,27 +38,19 @@ async function postComprarBoletos(req, res) {
   }
 }
 
-// POST /api/eventos (Crear Evento - ACTUALIZADO)
 async function postCreateEvento(req, res) {
   const usuario_id = req.user.id;
-
-  // Multer pone el archivo en req.file
   const imagen_url = req.file ? req.file.path : null;
-
-  // Ahora los datos vienen en req.body (como texto), hay que parsearlos
-  // porque al enviar archivos, FormData convierte todo a strings
   const { nombre, descripcion, fecha, lugar, latitud, longitud } = req.body;
-
   let tiposBoletos;
   try {
-    tiposBoletos = JSON.parse(req.body.tiposBoletos); // Parsear el string a JSON
+    tiposBoletos = JSON.parse(req.body.tiposBoletos);
   } catch (e) {
-    return res.status(400).json({ message: "Formato de boletos inválido." });
+    return res.status(400).json({ message: "Error en boletos." });
   }
 
-  if (!nombre || !fecha || !lugar) {
-    return res.status(400).json({ message: "Faltan campos requeridos." });
-  }
+  if (!nombre || !fecha || !lugar)
+    return res.status(400).json({ message: "Faltan campos." });
 
   try {
     const newEvento = await eventoService.createEvento(
@@ -96,9 +70,6 @@ async function postCreateEvento(req, res) {
   }
 }
 
-// ... (imports y funciones anteriores)
-
-// GET /api/eventos/dashboard/mis-eventos
 async function getDashboardEvents(req, res) {
   try {
     const eventos = await eventoService.getEventsForDashboard(
@@ -111,42 +82,29 @@ async function getDashboardEvents(req, res) {
   }
 }
 
-// DELETE /api/eventos/:id
 async function deleteEvento(req, res) {
   const { id } = req.params;
-  const { password } = req.body; // 👈 Recibimos la contraseña
-
-  if (!password) {
-    return res
-      .status(400)
-      .json({ message: "Se requiere contraseña para confirmar." });
-  }
-
+  const { password } = req.body;
+  if (!password)
+    return res.status(400).json({ message: "Se requiere contraseña." });
   try {
-    // Pasamos la password al servicio
     await eventoService.deleteEvento(id, req.user.id, req.user.rol, password);
-    res.json({ message: "Evento eliminado correctamente." });
+    res.json({ message: "Evento eliminado." });
   } catch (error) {
-    // Si es error de contraseña, solemos devolver 401 o 403, o 400 genérico
     res.status(400).json({ message: error.message });
   }
 }
 
-// PUT /api/eventos/:id
 async function updateEvento(req, res) {
   const { id } = req.params;
   const imagen_url = req.file ? req.file.path : req.body.imagen_url;
   const { nombre, descripcion, fecha, lugar, latitud, longitud } = req.body;
-
   let tiposBoletos;
   try {
-    if (req.body.tiposBoletos) {
-      tiposBoletos = JSON.parse(req.body.tiposBoletos);
-    }
+    if (req.body.tiposBoletos) tiposBoletos = JSON.parse(req.body.tiposBoletos);
   } catch (e) {
-    return res.status(400).json({ message: "Formato de boletos inválido." });
+    return res.status(400).json({ message: "Error boletos." });
   }
-
   const updateData = {
     nombre,
     descripcion,
@@ -171,11 +129,9 @@ async function updateEvento(req, res) {
   }
 }
 
-// GET /api/eventos/usuario/mis-tickets
 async function getMisTickets(req, res) {
   try {
-    const historial = await eventoService.getHistorialCompras(req.user.id);
-    res.json(historial);
+    res.json(await eventoService.getHistorialCompras(req.user.id));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -184,32 +140,24 @@ async function getMisTickets(req, res) {
 async function postReenviarCorreo(req, res) {
   const { compraId } = req.body;
   try {
-    const resultado = await eventoService.reenviarCorreoCompra(
-      compraId,
-      req.user.id
-    );
-    res.json(resultado);
+    res.json(await eventoService.reenviarCorreoCompra(compraId, req.user.id));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 }
 
+// ⭐️ NUEVO CONTROLADOR ⭐️
 async function postValidarTicket(req, res) {
   const { uuid } = req.body;
-  if (!uuid)
-    return res.status(400).json({ message: "Falta el código del ticket." });
-
+  if (!uuid) return res.status(400).json({ message: "Falta el código." });
   try {
     const resultado = await eventoService.validarTicket(
       uuid,
       req.user.id,
       req.user.rol
     );
-
-    // Si es válido o usado, respondemos 200 pero con el status dentro
     res.json(resultado);
   } catch (error) {
-    // Si es error de permiso o no existe
     res.status(400).json({ message: error.message, valid: false });
   }
 }
@@ -224,5 +172,5 @@ module.exports = {
   updateEvento,
   getMisTickets,
   postReenviarCorreo,
-  postValidarTicket,
+  postValidarTicket, // 👈 EXPORTAR
 };

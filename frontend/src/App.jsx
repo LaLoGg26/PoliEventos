@@ -32,11 +32,11 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/create-event" element={<CreateEventPage />} />
+          <Route path="/perfil" element={<ProfilePage />} />
           {/*  Rutas del Vendedor  */}
           <Route path="/dashboard" element={<SellerDashboard />} />
           <Route path="/edit-event/:id" element={<EditEventPage />} />
           <Route path="/mis-tickets" element={<MyTicketsPage />} />
-          <Route path="/perfil" element={<ProfilePage />} />
           <Route path="/scanner" element={<ScannerPage />} />
           <Route
             path="*"

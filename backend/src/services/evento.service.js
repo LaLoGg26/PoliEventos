@@ -1,23 +1,17 @@
 const { pool } = require("../config/db.connector");
-const { v4: uuidv4 } = require("uuid"); // Importar UUID
+const { v4: uuidv4 } = require("uuid");
 const { generarYEnviarBoleto } = require("../utils/ticketGenerator");
 const bcrypt = require("bcrypt");
 
-// 1. Obtener lista de todos los eventos (Público)
+// 1. Obtener lista
 async function findAll() {
   const query =
     "SELECT id, nombre, fecha, lugar, imagen_url FROM eventos ORDER BY fecha ASC";
-
-  try {
-    const [rows] = await pool.query(query);
-    return rows;
-  } catch (error) {
-    console.error("Error al obtener eventos:", error);
-    throw new Error("No se pudieron cargar los eventos.");
-  }
+  const [rows] = await pool.query(query);
+  return rows;
 }
 
-// 2. Obtener un evento y sus boletos (Público - Detalle)
+// 2. Obtener por ID
 async function findById(eventoId) {
   const query = `
         SELECT 
@@ -37,26 +31,16 @@ async function findById(eventoId) {
         WHERE e.id = ?
         GROUP BY e.id
     `;
-
-  try {
-    const [rows] = await pool.query(query, [eventoId]);
-    if (rows.length === 0) return null;
-
-    return rows[0];
-  } catch (error) {
-    console.error("Error al obtener evento por ID:", error);
-    throw new Error("No se pudo cargar el detalle del evento.");
-  }
+  const [rows] = await pool.query(query, [eventoId]);
+  if (rows.length === 0) return null;
+  return rows[0];
 }
 
-// 3. Procesar la compra (Transacción)
+// 3. Comprar Boletos
 async function comprarBoletos(usuarioId, boletoId, cantidad) {
   const connection = await pool.getConnection();
-
   try {
     await connection.beginTransaction();
-
-    // A. Verificar Inventario
     const [rows] = await connection.query(
       "SELECT * FROM boletos WHERE id = ? FOR UPDATE",
       [boletoId]
@@ -64,40 +48,31 @@ async function comprarBoletos(usuarioId, boletoId, cantidad) {
     if (rows.length === 0) throw new Error("Boleto no encontrado.");
 
     const boleto = rows[0];
-    const disponibles = boleto.cantidad_total - boleto.cantidad_vendida;
-    if (disponibles < cantidad) throw new Error("Inventario insuficiente.");
+    if (boleto.cantidad_total - boleto.cantidad_vendida < cantidad)
+      throw new Error("Inventario insuficiente.");
 
-    // B. Actualizar Inventario
-    const nuevaCantidadVendida = boleto.cantidad_vendida + cantidad;
     await connection.query(
       "UPDATE boletos SET cantidad_vendida = ? WHERE id = ?",
-      [nuevaCantidadVendida, boletoId]
+      [boleto.cantidad_vendida + cantidad, boletoId]
     );
 
-    // C. Registrar Compra (Cabecera)
     const total = Number(boleto.precio) * Number(cantidad);
-
-    // Nota: Ya no guardamos 'uuid_unico' en la tabla compras, ese campo puede quedar null o podemos quitarlo después.
-    // Aquí insertamos la compra general.
     const [resCompra] = await connection.query(
       "INSERT INTO compras (usuario_id, boleto_id, cantidad, total, uuid_unico) VALUES (?, ?, ?, ?, ?)",
-      [usuarioId, boletoId, cantidad, total, "MULTI-ORDER"] // Ponemos un placeholder o uuid general
+      [usuarioId, boletoId, cantidad, total, "MULTI"]
     );
 
     const compraId = resCompra.insertId;
     const listaUUIDs = [];
-
-    // D. Generar Tickets Individuales (El Bucle)
     const queryTicket =
       "INSERT INTO tickets (compra_id, uuid_unico) VALUES (?, ?)";
 
     for (let i = 0; i < cantidad; i++) {
-      const uniqueCode = uuidv4(); // Código único para ESTE boleto
+      const uniqueCode = uuidv4();
       await connection.query(queryTicket, [compraId, uniqueCode]);
-      listaUUIDs.push(uniqueCode); // Lo guardamos para el PDF
+      listaUUIDs.push(uniqueCode);
     }
 
-    // E. Obtener datos para correo
     const [userData] = await connection.query(
       "SELECT nombre, email FROM usuarios WHERE id = ?",
       [usuarioId]
@@ -106,10 +81,8 @@ async function comprarBoletos(usuarioId, boletoId, cantidad) {
       "SELECT nombre, fecha, lugar FROM eventos WHERE id = ?",
       [boleto.evento_id]
     );
-
     const datosCompra = { id_compra: compraId, total, cantidad };
 
-    // F. Enviar Correo (Pasamos la LISTA de UUIDs)
     generarYEnviarBoleto(
       listaUUIDs,
       eventoData[0],
@@ -121,7 +94,7 @@ async function comprarBoletos(usuarioId, boletoId, cantidad) {
     await connection.commit();
     return {
       success: true,
-      message: `Compra exitosa. Se han enviado ${cantidad} boletos a ${userData[0].email}`,
+      message: `Compra exitosa. Boletos enviados a ${userData[0].email}`,
     };
   } catch (error) {
     await connection.rollback();
@@ -131,7 +104,7 @@ async function comprarBoletos(usuarioId, boletoId, cantidad) {
   }
 }
 
-// 4. Crear Evento (Transacción - Múltiples Boletos y Mapa)
+// 4. Crear Evento
 async function createEvento(
   nombre,
   descripcion,
@@ -146,13 +119,7 @@ async function createEvento(
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-
-    // A. Insertar el Evento (8 parámetros)
-    const queryEvento = `
-            INSERT INTO eventos (nombre, descripcion, fecha, lugar, imagen_url, usuario_id, latitud, longitud) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `;
-    // Si lat/long son undefined, se guardarán como NULL
+    const queryEvento = `INSERT INTO eventos (nombre, descripcion, fecha, lugar, imagen_url, usuario_id, latitud, longitud) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
     const [resultEvento] = await connection.query(queryEvento, [
       nombre,
       descripcion,
@@ -163,15 +130,9 @@ async function createEvento(
       latitud || null,
       longitud || null,
     ]);
-
     const eventoId = resultEvento.insertId;
 
-    // B. Insertar los Tipos de Boletos
-    const queryBoleto = `
-            INSERT INTO boletos (evento_id, nombre_zona, precio, cantidad_total, cantidad_vendida, activo)
-            VALUES (?, ?, ?, ?, 0, 1)
-        `;
-
+    const queryBoleto = `INSERT INTO boletos (evento_id, nombre_zona, precio, cantidad_total, cantidad_vendida, activo) VALUES (?, ?, ?, ?, 0, 1)`;
     for (const boleto of tiposBoletos) {
       await connection.query(queryBoleto, [
         eventoId,
@@ -180,7 +141,6 @@ async function createEvento(
         boleto.cantidad_total,
       ]);
     }
-
     await connection.commit();
     return { id: eventoId, nombre };
   } catch (error) {
@@ -191,63 +151,43 @@ async function createEvento(
   }
 }
 
-// 5. Obtener eventos para el Dashboard (Filtrado por Rol)
+// 5. Dashboard
 async function getEventsForDashboard(userId, userRole) {
   let query;
   const params = [];
-
   if (userRole === "SUPER_USER") {
-    // 👑 SUPER USUARIO: Ve TODO + Datos del Vendedor (JOIN)
     query = `
-            SELECT 
-                e.id, e.nombre, e.fecha, e.lugar, 
-                u.nombre as vendedor_nombre, 
-                u.email as vendedor_email
-            FROM eventos e
-            JOIN usuarios u ON e.usuario_id = u.id
-            ORDER BY e.fecha DESC
+            SELECT e.id, e.nombre, e.fecha, e.lugar, u.nombre as vendedor_nombre, u.email as vendedor_email
+            FROM eventos e JOIN usuarios u ON e.usuario_id = u.id ORDER BY e.fecha DESC
         `;
   } else {
-    // 💼 VENDEDOR: Solo ve sus eventos, no necesitamos join
     query =
       "SELECT id, nombre, fecha, lugar FROM eventos WHERE usuario_id = ? ORDER BY fecha DESC";
     params.push(userId);
   }
-
   const [rows] = await pool.query(query, params);
   return rows;
 }
 
-// 6. Eliminar Evento (CON VERIFICACIÓN DE CONTRASEÑA)
+// 6. Eliminar Evento
 async function deleteEvento(eventoId, userId, userRole, password) {
   const connection = await pool.getConnection();
   try {
-    // 1. Obtener la contraseña encriptada del usuario
     const [users] = await connection.query(
       "SELECT password FROM usuarios WHERE id = ?",
       [userId]
     );
     if (users.length === 0) throw new Error("Usuario no encontrado.");
 
-    const userHash = users[0].password;
+    const isMatch = await bcrypt.compare(password, users[0].password);
+    if (!isMatch) throw new Error("Contraseña incorrecta.");
 
-    // 2. Verificar que la contraseña proporcionada coincida
-    const isMatch = await bcrypt.compare(password, userHash);
-    if (!isMatch) {
-      throw new Error("Contraseña incorrecta. No se pudo eliminar el evento.");
-    }
-
-    // 3. Verificar propiedad del evento
     let checkQuery = "SELECT usuario_id FROM eventos WHERE id = ?";
     const [rows] = await connection.query(checkQuery, [eventoId]);
-
     if (rows.length === 0) throw new Error("Evento no encontrado.");
+    if (userRole !== "SUPER_USER" && rows[0].usuario_id !== userId)
+      throw new Error("No tienes permiso.");
 
-    if (userRole !== "SUPER_USER" && rows[0].usuario_id !== userId) {
-      throw new Error("No tienes permiso para eliminar este evento.");
-    }
-
-    // 4. Borrar
     await connection.query("DELETE FROM eventos WHERE id = ?", [eventoId]);
     return true;
   } finally {
@@ -255,28 +195,18 @@ async function deleteEvento(eventoId, userId, userRole, password) {
   }
 }
 
-// 7. Actualizar Evento (Datos + Boletos Híbridos)
+// 7. Actualizar Evento
 async function updateEvento(eventoId, userId, userRole, data) {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-
-    // A. Verificar permisos
     let checkQuery = "SELECT usuario_id FROM eventos WHERE id = ?";
     const [rows] = await connection.query(checkQuery, [eventoId]);
-
     if (rows.length === 0) throw new Error("Evento no encontrado.");
-    if (userRole !== "SUPER_USER" && rows[0].usuario_id !== userId) {
-      throw new Error("No tienes permiso para editar este evento.");
-    }
+    if (userRole !== "SUPER_USER" && rows[0].usuario_id !== userId)
+      throw new Error("No tienes permiso.");
 
-    // B. Actualizar Datos del Evento
-    const queryEvento = `
-            UPDATE eventos 
-            SET nombre = ?, descripcion = ?, fecha = ?, lugar = ?, latitud = ?, longitud = ?, imagen_url = ?
-            WHERE id = ?
-        `;
-
+    const queryEvento = `UPDATE eventos SET nombre = ?, descripcion = ?, fecha = ?, lugar = ?, latitud = ?, longitud = ?, imagen_url = ? WHERE id = ?`;
     await connection.query(queryEvento, [
       data.nombre,
       data.descripcion,
@@ -288,17 +218,14 @@ async function updateEvento(eventoId, userId, userRole, data) {
       eventoId,
     ]);
 
-    // C. Gestionar Boletos (Activar/Desactivar o Crear Nuevos)
     if (data.tiposBoletos && Array.isArray(data.tiposBoletos)) {
       for (const boleto of data.tiposBoletos) {
         if (boleto.id) {
-          // SI TIENE ID -> Es existente, solo actualizamos 'activo'
           await connection.query("UPDATE boletos SET activo = ? WHERE id = ?", [
             boleto.activo ? 1 : 0,
             boleto.id,
           ]);
         } else {
-          // NO TIENE ID -> Es nuevo, lo insertamos
           await connection.query(
             "INSERT INTO boletos (evento_id, nombre_zona, precio, cantidad_total, cantidad_vendida, activo) VALUES (?, ?, ?, ?, 0, 1)",
             [eventoId, boleto.nombre_zona, boleto.precio, boleto.cantidad_total]
@@ -306,7 +233,6 @@ async function updateEvento(eventoId, userId, userRole, data) {
         }
       }
     }
-
     await connection.commit();
     return { id: eventoId, message: "Actualizado" };
   } catch (error) {
@@ -317,87 +243,41 @@ async function updateEvento(eventoId, userId, userRole, data) {
   }
 }
 
-// ... funciones anteriores ...
-
-// 8. Obtener historial de compras del usuario (Wallet)
+// 8. Historial Wallet
 async function getHistorialCompras(usuarioId) {
   const query = `
-        SELECT 
-            c.id as compra_id,
-            c.fecha_compra,
-            c.total,
-            c.cantidad,
-            e.nombre as evento_nombre,
-            e.fecha as evento_fecha,
-            e.lugar as evento_lugar,
-            e.imagen_url,
-            b.nombre_zona,
-            JSON_ARRAYAGG(
-                JSON_OBJECT(
-                    'uuid', t.uuid_unico,
-                    'estado', t.estado
-                )
-            ) as tickets
+        SELECT c.id as compra_id, c.fecha_compra, c.total, c.cantidad, e.nombre as evento_nombre, e.fecha as evento_fecha, e.lugar as evento_lugar, e.imagen_url, b.nombre_zona,
+            JSON_ARRAYAGG(JSON_OBJECT('uuid', IFNULL(t.uuid_unico, 'PENDIENTE'), 'estado', IFNULL(t.estado, 'DESCONOCIDO'))) as tickets
         FROM compras c
         JOIN boletos b ON c.boleto_id = b.id
         JOIN eventos e ON b.evento_id = e.id
         LEFT JOIN tickets t ON c.id = t.compra_id
-        WHERE c.usuario_id = ?
-        GROUP BY c.id
-        ORDER BY c.fecha_compra DESC
+        WHERE c.usuario_id = ? GROUP BY c.id ORDER BY c.fecha_compra DESC
     `;
-
   const [rows] = await pool.query(query, [usuarioId]);
   return rows;
 }
 
-// 9. Reenviar Correo (VERSIÓN ROBUSTA)
+// 9. Reenviar Correo
 async function reenviarCorreoCompra(compraId, userId) {
-  // 1. Obtener datos con alias muy claros para evitar confusiones
   const queryInfo = `
-        SELECT 
-            c.id as compra_id, 
-            c.total, 
-            c.cantidad,
-            u.email as usuario_email, 
-            u.nombre as usuario_nombre,
-            e.nombre as evento_nombre, 
-            e.fecha as evento_fecha, 
-            e.lugar as evento_lugar,
-            b.nombre_zona, 
-            b.precio
+        SELECT c.id as compra_id, c.total, c.cantidad, u.email as usuario_email, u.nombre as usuario_nombre, e.nombre as evento_nombre, e.fecha as evento_fecha, e.lugar as evento_lugar, b.nombre_zona, b.precio
         FROM compras c
         JOIN usuarios u ON c.usuario_id = u.id
         JOIN boletos b ON c.boleto_id = b.id
         JOIN eventos e ON b.evento_id = e.id
         WHERE c.id = ? AND c.usuario_id = ?
     `;
-
   const [rows] = await pool.query(queryInfo, [compraId, userId]);
-
-  if (rows.length === 0) {
-    throw new Error("No se encontró la compra o no tienes permiso.");
-  }
+  if (rows.length === 0) throw new Error("No encontrado.");
   const info = rows[0];
-
-  // 2. Obtener los UUIDs
   const [rowsTickets] = await pool.query(
     "SELECT uuid_unico FROM tickets WHERE compra_id = ?",
     [compraId]
   );
-
-  if (rowsTickets.length === 0) {
-    // Fallback: Si por alguna razón no hay tickets en la tabla tickets (compras viejas), generar uno temporal o lanzar error
-    // Para este caso, asumiremos que si es una compra válida, debe tener tickets.
-    // Si es una compra "vieja" (antes del sistema de tickets), esto fallará.
-    throw new Error(
-      "Esta compra es antigua y no tiene tickets generados para reenviar."
-    );
-  }
+  if (rowsTickets.length === 0) throw new Error("Compra antigua sin tickets.");
 
   const listaUUIDs = rowsTickets.map((t) => t.uuid_unico);
-
-  // 3. Construir objetos para el PDF
   const eventoObj = {
     nombre: info.evento_nombre,
     fecha: info.evento_fecha,
@@ -411,7 +291,6 @@ async function reenviarCorreoCompra(compraId, userId) {
     cantidad: info.cantidad,
   };
 
-  // 4. Enviar
   await generarYEnviarBoleto(
     listaUUIDs,
     eventoObj,
@@ -419,24 +298,15 @@ async function reenviarCorreoCompra(compraId, userId) {
     boletoObj,
     datosCompra
   );
-
-  return {
-    success: true,
-    message: `Correo reenviado exitosamente a ${info.usuario_email}`,
-  };
+  return { success: true, message: `Correo reenviado a ${info.usuario_email}` };
 }
 
-// 10. Validar Ticket (Scanner)
+// 10. Validar Ticket (Scanner) - ⭐️ NUEVA FUNCIÓN ⭐️
 async function validarTicket(uuid, userId, userRole) {
   const connection = await pool.getConnection();
   try {
-    // 1. Buscar el ticket y datos del evento/dueño
     const query = `
-            SELECT 
-                t.id, t.estado, t.uuid_unico,
-                e.nombre as evento_nombre, 
-                e.usuario_id as creador_id,
-                b.nombre_zona
+            SELECT t.id, t.estado, t.uuid_unico, e.nombre as evento_nombre, e.usuario_id as creador_id, b.nombre_zona
             FROM tickets t
             JOIN compras c ON t.compra_id = c.id
             JOIN boletos b ON c.boleto_id = b.id
@@ -445,19 +315,12 @@ async function validarTicket(uuid, userId, userRole) {
         `;
     const [rows] = await connection.query(query, [uuid]);
 
-    if (rows.length === 0) {
-      throw new Error("Ticket NO VÁLIDO (No existe en el sistema).");
-    }
-
+    if (rows.length === 0) throw new Error("Ticket NO VÁLIDO.");
     const ticket = rows[0];
 
-    // 2. Verificar Permisos (Seguridad)
-    // Si NO es Super Usuario Y el creador del evento NO es el usuario actual -> Bloquear
     if (userRole !== "SUPER_USER" && ticket.creador_id !== userId) {
       throw new Error("⛔ Este ticket no pertenece a tus eventos.");
     }
-
-    // 3. Verificar Estado
     if (ticket.estado === "USADO") {
       return {
         valid: false,
@@ -466,16 +329,10 @@ async function validarTicket(uuid, userId, userRole) {
       };
     }
 
-    // 4. Si es válido, marcar como USADO
     await connection.query('UPDATE tickets SET estado = "USADO" WHERE id = ?', [
       ticket.id,
     ]);
-
-    return {
-      valid: true,
-      message: "✅ ACCESO CONCEDIDO",
-      data: ticket,
-    };
+    return { valid: true, message: "✅ ACCESO CONCEDIDO", data: ticket };
   } finally {
     connection.release();
   }

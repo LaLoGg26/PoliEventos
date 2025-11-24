@@ -3,7 +3,7 @@ import { Html5QrcodeScanner } from "html5-qrcode";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 
-const API_URL = "http://localhost:3001/api/eventos";
+const API_URL = "http://localhost:3001/api/eventos"; // Ajusta a VITE_API_URL en producción
 
 function ScannerPage() {
   const { user, token } = useAuth();
@@ -12,14 +12,12 @@ function ScannerPage() {
   const [scanResult, setScanResult] = useState(null);
   const [isScanning, setIsScanning] = useState(true);
 
-  // Protección de ruta
   useEffect(() => {
     if (!user || (user.rol !== "VENDEDOR" && user.rol !== "SUPER_USER")) {
       navigate("/");
     }
   }, [user, navigate]);
 
-  // 1. DEFINIMOS LA FUNCIÓN DE VALIDACIÓN PRIMERO (con useCallback)
   const validarCodigo = useCallback(
     async (uuid) => {
       try {
@@ -31,9 +29,7 @@ function ScannerPage() {
           },
           body: JSON.stringify({ uuid }),
         });
-
         const data = await res.json();
-
         if (res.ok) {
           setScanResult(data);
         } else {
@@ -47,43 +43,27 @@ function ScannerPage() {
       }
     },
     [token]
-  ); // Dependencia: token
+  );
 
-  // 2. AHORA SÍ EL EFECTO DEL ESCÁNER
   useEffect(() => {
     let scanner;
-
     if (isScanning) {
       scanner = new Html5QrcodeScanner(
         "reader",
         { fps: 5, qrbox: { width: 250, height: 250 } },
         false
       );
-
-      // Definimos las funciones callback aquí dentro
       const onScanSuccess = (decodedText) => {
         scanner.clear();
         setIsScanning(false);
-        validarCodigo(decodedText); // Ahora sí existe esta función
+        validarCodigo(decodedText);
       };
-
-      const onScanFailure = (error) => {
-        // Dejamos esto vacío o lo comentamos para que no llene la consola de spam
-        // console.warn(error);
-      };
-
-      scanner.render(onScanSuccess, onScanFailure);
+      scanner.render(onScanSuccess, () => {});
     }
-
-    // Cleanup
     return () => {
-      if (scanner) {
-        scanner
-          .clear()
-          .catch((err) => console.error("Error limpiando scanner", err));
-      }
+      if (scanner) scanner.clear().catch(console.error);
     };
-  }, [isScanning, validarCodigo]); // Agregamos validarCodigo a dependencias
+  }, [isScanning, validarCodigo]);
 
   const resetScanner = () => {
     setScanResult(null);
@@ -126,7 +106,6 @@ function ScannerPage() {
           <p style={{ fontSize: "1.2rem", fontWeight: "bold" }}>
             {scanResult.message}
           </p>
-
           {scanResult.data && (
             <div
               style={{
@@ -148,7 +127,6 @@ function ScannerPage() {
               </p>
             </div>
           )}
-
           <button onClick={resetScanner} style={styles.nextBtn}>
             Escanear Siguiente
           </button>
@@ -181,5 +159,4 @@ const styles = {
     width: "100%",
   },
 };
-
 export default ScannerPage;
