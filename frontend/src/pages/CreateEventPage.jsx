@@ -21,7 +21,7 @@ function CreateEventPage() {
   const [coords, setCoords] = useState(null);
 
   const [tiposBoletos, setTiposBoletos] = useState([
-    { nombre_zona: "General", precio: "", cantidad_total: "" },
+    { nombre_zona: "", precio: "", cantidad_total: "" },
   ]);
 
   const [error, setError] = useState(null);
@@ -29,7 +29,6 @@ function CreateEventPage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [createdEventId, setCreatedEventId] = useState(null);
 
-  // Protección de ruta
   useEffect(() => {
     if (!user) {
       navigate("/login");
@@ -106,6 +105,41 @@ function CreateEventPage() {
 
   return (
     <div style={styles.container}>
+      {/* 🎨 ESTILOS RESPONSIVOS AGREGADOS AQUÍ */}
+      <style>{`
+        /* Grilla General (Datos del Evento) */
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        /* Grilla de Boletos (3 columnas en escritorio) */
+        .ticket-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 10px;
+        }
+
+        /* 📱 VISTA MÓVIL (Menos de 768px) */
+        @media (max-width: 768px) {
+            .form-grid {
+                grid-template-columns: 1fr; /* 1 sola columna para datos generales */
+            }
+
+            /* Reacomodo inteligente de boletos */
+            .ticket-grid {
+                grid-template-columns: 1fr 1fr; /* 2 columnas */
+                row-gap: 10px;
+            }
+            /* El primer input (Nombre Zona) ocupará todo el ancho (2 columnas) */
+            .ticket-grid input:nth-child(1) {
+                grid-column: 1 / -1; 
+            }
+            /* Precio y Cantidad se quedan abajo compartiendo mitad y mitad */
+        }
+      `}</style>
+
       {showSuccessModal && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalCard}>
@@ -135,7 +169,9 @@ function CreateEventPage() {
 
         <section style={styles.section}>
           <h3 style={styles.sectionTitle}>1. Información General</h3>
-          <div style={styles.grid}>
+
+          {/* USAMOS LA CLASE CSS RESPONSIVA AQUI */}
+          <div className="form-grid">
             <div style={styles.inputGroup}>
               <label style={styles.label}>Nombre del Evento</label>
               <input
@@ -144,6 +180,7 @@ function CreateEventPage() {
                 onChange={handleChange}
                 required
                 style={styles.input}
+                placeholder="Ej. Viva la revolución"
               />
             </div>
             <div style={styles.inputGroup}>
@@ -165,7 +202,7 @@ function CreateEventPage() {
                 onChange={handleChange}
                 required
                 style={styles.input}
-                placeholder="Ej. Palacio de los Deportes"
+                placeholder="Ej. Reforma"
               />
             </div>
             <div style={styles.inputGroup}>
@@ -187,11 +224,12 @@ function CreateEventPage() {
                 style={styles.textarea}
               />
             </div>
-            <div style={{ ...styles.inputGroup, gridColumn: "1 / -1" }}>
+
+            {/* El mapa ocupa todo el ancho */}
+            <div style={{ gridColumn: "1 / -1", marginTop: "10px" }}>
               <label style={styles.label}>
                 Ubicación Exacta (Haz clic en el mapa)
               </label>
-              {/* Al no pasar 'initialPosition', el mapa inicia en el default */}
               <LocationPicker onLocationSelect={setCoords} />
               {coords && (
                 <p
@@ -222,10 +260,11 @@ function CreateEventPage() {
           <div style={styles.ticketsContainer}>
             {tiposBoletos.map((boleto, index) => (
               <div key={index} style={styles.ticketCard}>
-                <div style={styles.ticketGrid}>
+                {/* USAMOS LA CLASE CSS RESPONSIVA AQUI */}
+                <div className="ticket-grid">
                   <input
                     name="nombre_zona"
-                    placeholder="Zona"
+                    placeholder="Nombre Zona (Ej. General)"
                     value={boleto.nombre_zona}
                     onChange={(e) => handleBoletoChange(index, e)}
                     required
@@ -266,7 +305,7 @@ function CreateEventPage() {
 
         <div style={styles.footer}>
           <button type="submit" disabled={loading} style={styles.submitButton}>
-            {loading ? "Publicando..." : "Publicar Evento"}
+            {loading ? "Subiendo imagen y creando..." : "Publicar Evento"}
           </button>
         </div>
       </form>
@@ -288,11 +327,11 @@ const styles = {
     maxWidth: "800px",
     borderRadius: "12px",
     boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
-    padding: "40px",
+    padding: "30px",
     display: "flex",
     flexDirection: "column",
     gap: "30px",
-  },
+  }, // Padding reducido para móvil
   header: { borderBottom: "1px solid #eee", paddingBottom: "20px" },
   title: { margin: 0, color: "#111", fontSize: "1.8rem" },
   section: { display: "flex", flexDirection: "column", gap: "15px" },
@@ -308,20 +347,22 @@ const styles = {
     borderLeft: "4px solid #2563EB",
     paddingLeft: "10px",
   },
-  grid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" },
+
+  // Nota: styles.grid se reemplazó por className="form-grid"
+
   inputGroup: { display: "flex", flexDirection: "column", gap: "5px" },
   label: { fontSize: "0.85rem", fontWeight: "bold", color: "#555" },
   input: {
-    padding: "10px",
-    borderRadius: "6px",
+    padding: "12px",
+    borderRadius: "8px",
     border: "1px solid #ddd",
     fontSize: "0.95rem",
     width: "100%",
     boxSizing: "border-box",
   },
   textarea: {
-    padding: "10px",
-    borderRadius: "6px",
+    padding: "12px",
+    borderRadius: "8px",
     border: "1px solid #ddd",
     fontSize: "0.95rem",
     width: "100%",
@@ -329,6 +370,7 @@ const styles = {
     resize: "vertical",
     fontFamily: "inherit",
   },
+
   ticketsContainer: { display: "flex", flexDirection: "column", gap: "15px" },
   ticketCard: {
     backgroundColor: "#f9fafb",
@@ -336,16 +378,17 @@ const styles = {
     borderRadius: "8px",
     padding: "15px",
   },
-  ticketGrid: {
-    display: "grid",
-    gridTemplateColumns: "2fr 1fr 1fr",
-    gap: "10px",
-  },
+
+  // Nota: styles.ticketGrid se reemplazó por className="ticket-grid"
+
   ticketInput: {
-    padding: "8px",
-    borderRadius: "4px",
+    padding: "10px",
+    borderRadius: "6px",
     border: "1px solid #ddd",
-  },
+    width: "100%",
+    boxSizing: "border-box",
+  }, // Width 100% importante
+
   addButton: {
     backgroundColor: "#e0e7ff",
     color: "#3730a3",
@@ -362,8 +405,11 @@ const styles = {
     border: "none",
     cursor: "pointer",
     fontSize: "0.8rem",
-    marginTop: "5px",
+    marginTop: "10px",
     textDecoration: "underline",
+    display: "block",
+    width: "100%",
+    textAlign: "right",
   },
   submitButton: {
     padding: "15px",
@@ -382,6 +428,8 @@ const styles = {
     padding: "10px",
     borderRadius: "6px",
   },
+
+  // Modal
   modalOverlay: {
     position: "fixed",
     top: 0,
