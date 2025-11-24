@@ -14,33 +14,22 @@ async function findAll() {
 // 2. Obtener por ID
 async function findById(eventoId) {
   const query = `
-        SELECT 
-            e.id, e.nombre, e.descripcion, e.fecha, e.lugar, e.imagen_url,
-            e.latitud, e.longitud,
-            JSON_ARRAYAGG(
-                JSON_OBJECT(
-                    'id', b.id, 
-                    'zona', b.nombre_zona, 
-                    'precio', b.precio, 
-                    'disponibles', (b.cantidad_total - b.cantidad_vendida),
-                    'activo', b.activo 
-                )
-            ) AS boletos
-        FROM eventos e
-        LEFT JOIN boletos b ON e.id = b.evento_id
-        WHERE e.id = ?
-        GROUP BY e.id
+        SELECT e.id, e.nombre, e.descripcion, e.fecha, e.lugar, e.imagen_url, e.latitud, e.longitud,
+        JSON_ARRAYAGG(JSON_OBJECT('id', b.id, 'zona', b.nombre_zona, 'precio', b.precio, 'disponibles', (b.cantidad_total - b.cantidad_vendida), 'activo', b.activo)) AS boletos
+        FROM eventos e LEFT JOIN boletos b ON e.id = b.evento_id WHERE e.id = ? GROUP BY e.id
     `;
   const [rows] = await pool.query(query, [eventoId]);
-  if (rows.length === 0) return null;
   return rows[0];
 }
 
-// 3. Comprar Boletos
+// 3. COMPRAR BOLETOS (La función importante)
 async function comprarBoletos(usuarioId, boletoId, cantidad) {
   const connection = await pool.getConnection();
+
   try {
     await connection.beginTransaction();
+
+    // A. Verificar Stock
     const [rows] = await connection.query(
       "SELECT * FROM boletos WHERE id = ? FOR UPDATE",
       [boletoId]
@@ -51,18 +40,21 @@ async function comprarBoletos(usuarioId, boletoId, cantidad) {
     if (boleto.cantidad_total - boleto.cantidad_vendida < cantidad)
       throw new Error("Inventario insuficiente.");
 
+    // B. Actualizar Stock
     await connection.query(
       "UPDATE boletos SET cantidad_vendida = ? WHERE id = ?",
       [boleto.cantidad_vendida + cantidad, boletoId]
     );
 
+    // C. Registrar Compra Maestra
     const total = Number(boleto.precio) * Number(cantidad);
     const [resCompra] = await connection.query(
       "INSERT INTO compras (usuario_id, boleto_id, cantidad, total, uuid_unico) VALUES (?, ?, ?, ?, ?)",
       [usuarioId, boletoId, cantidad, total, "MULTI"]
     );
-
     const compraId = resCompra.insertId;
+
+    // D. Generar Tickets Individuales (Loop)
     const listaUUIDs = [];
     const queryTicket =
       "INSERT INTO tickets (compra_id, uuid_unico) VALUES (?, ?)";
@@ -73,6 +65,7 @@ async function comprarBoletos(usuarioId, boletoId, cantidad) {
       listaUUIDs.push(uniqueCode);
     }
 
+    // E. Preparar datos para correo
     const [userData] = await connection.query(
       "SELECT nombre, email FROM usuarios WHERE id = ?",
       [usuarioId]
@@ -83,13 +76,16 @@ async function comprarBoletos(usuarioId, boletoId, cantidad) {
     );
     const datosCompra = { id_compra: compraId, total, cantidad };
 
+    // F. Enviar Correo (Background)
     generarYEnviarBoleto(
       listaUUIDs,
       eventoData[0],
       userData[0],
       boleto,
       datosCompra
-    ).catch((err) => console.error("Error enviando correo:", err));
+    ).catch((err) =>
+      console.error("⚠️ El correo falló, pero la compra se registró:", err)
+    );
 
     await connection.commit();
     return {
@@ -103,7 +99,6 @@ async function comprarBoletos(usuarioId, boletoId, cantidad) {
     connection.release();
   }
 }
-
 // 4. Crear Evento
 async function createEvento(
   nombre,
