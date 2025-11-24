@@ -197,10 +197,18 @@ async function getEventsForDashboard(userId, userRole) {
   const params = [];
 
   if (userRole === "SUPER_USER") {
-    // El Admin ve TODO
-    query = "SELECT id, nombre, fecha, lugar FROM eventos ORDER BY fecha DESC";
+    // 👑 SUPER USUARIO: Ve TODO + Datos del Vendedor (JOIN)
+    query = `
+            SELECT 
+                e.id, e.nombre, e.fecha, e.lugar, 
+                u.nombre as vendedor_nombre, 
+                u.email as vendedor_email
+            FROM eventos e
+            JOIN usuarios u ON e.usuario_id = u.id
+            ORDER BY e.fecha DESC
+        `;
   } else {
-    // El Vendedor solo ve los SUYOS
+    // 💼 VENDEDOR: Solo ve sus eventos, no necesitamos join
     query =
       "SELECT id, nombre, fecha, lugar FROM eventos WHERE usuario_id = ? ORDER BY fecha DESC";
     params.push(userId);

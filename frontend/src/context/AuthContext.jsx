@@ -49,6 +49,11 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem("token");
   };
 
+  const updateLocalUser = (userData) => {
+    setUser(userData);
+    localStorage.setItem("user", JSON.stringify(userData));
+  };
+
   const contextValue = {
     user,
     token,
@@ -58,6 +63,7 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
+    updateLocalUser,
   };
 
   return (

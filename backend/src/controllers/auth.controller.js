@@ -67,7 +67,53 @@ async function login(req, res) {
   }
 }
 
+// Actualizar Perfil
+async function updateProfile(req, res) {
+  try {
+    const updates = {
+      nombre: req.body.nombre,
+      password: req.body.password,
+    };
+
+    // Si Multer procesó una imagen, la agregamos
+    if (req.file) {
+      updates.avatar_url = req.file.path;
+    }
+
+    const updatedUser = await authService.updateUserProfile(
+      req.user.id,
+      updates
+    );
+
+    if (!updatedUser) {
+      return res
+        .status(400)
+        .json({ message: "No se enviaron datos para actualizar." });
+    }
+
+    res.json({ message: "Perfil actualizado", user: updatedUser });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+}
+
+// Mejorar Plan a Vendedor
+async function upgradeUser(req, res) {
+  try {
+    // Aquí podrías integrar Stripe en el futuro. Por ahora es directo.
+    const updatedUser = await authService.upgradeToSeller(req.user.id);
+    res.json({
+      message: "¡Felicidades! Ahora eres Vendedor.",
+      user: updatedUser,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+}
+
 module.exports = {
   register,
   login,
+  updateProfile, // 👈 Nuevo
+  upgradeUser, // 👈 Nuevo
 };

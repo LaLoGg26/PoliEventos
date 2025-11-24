@@ -6,9 +6,8 @@ const jwt = require("jsonwebtoken");
 const JWT_SECRET = process.env.JWT_SECRET;
 const SALT_ROUNDS = 10; // Número de rondas de sal para bcrypt
 
-/**
- * Registra un nuevo usuario en la DB.
- */
+// 1. Funcion para Registra un nuevo usuario en la DB.
+
 async function registerUser(nombre, email, password, rol = "COMPRADOR") {
   const connection = await pool.getConnection();
   try {
@@ -37,15 +36,14 @@ async function registerUser(nombre, email, password, rol = "COMPRADOR") {
   }
 }
 
-/**
- * Loguea un usuario y genera un JWT.
- */
+// 2.Funcion para Loguea un usuario y genera un JWT.
+
 async function loginUser(email, password) {
   const connection = await pool.getConnection();
   try {
     // 1. Buscar usuario por email
     const query =
-      "SELECT id, nombre, email, password, rol, suscripcion_activa FROM usuarios WHERE email = ?";
+      "SELECT id, nombre, email, password, rol, suscripcion_activa, avatar_url FROM usuarios WHERE email = ?";
     const [rows] = await connection.query(query, [email]);
 
     if (rows.length === 0) {
@@ -81,7 +79,8 @@ async function loginUser(email, password) {
         nombre: user.nombre,
         email: user.email,
         rol: user.rol,
-        suscripcion_activa: user.suscripcion_activa, // ⭐️ NUEVO CAMPO ⭐️
+        suscripcion_activa: user.suscripcion_activa,
+        avatar_url: user.avatar_url,
       },
     };
   } catch (error) {
@@ -91,7 +90,68 @@ async function loginUser(email, password) {
   }
 }
 
+// 3. Función Genérica para Actualizar Perfil (Nombre, Password, Avatar)
+async function updateUserProfile(userId, data) {
+  const connection = await pool.getConnection();
+  try {
+    // Construcción dinámica de la query
+    let fields = [];
+    let values = [];
+
+    if (data.nombre) {
+      fields.push("nombre = ?");
+      values.push(data.nombre);
+    }
+    if (data.avatar_url) {
+      fields.push("avatar_url = ?");
+      values.push(data.avatar_url);
+    }
+    if (data.password) {
+      const hashedPassword = await bcrypt.hash(data.password, 10);
+      fields.push("password = ?");
+      values.push(hashedPassword);
+    }
+
+    if (fields.length === 0) return null; // Nada que actualizar
+
+    values.push(userId); // El ID va al final para el WHERE
+
+    const query = `UPDATE usuarios SET ${fields.join(", ")} WHERE id = ?`;
+    await connection.query(query, values);
+
+    // Devolver usuario actualizado (sin password) para refrescar el token/frontend
+    const [rows] = await connection.query(
+      "SELECT id, nombre, email, rol, suscripcion_activa, avatar_url FROM usuarios WHERE id = ?",
+      [userId]
+    );
+    return rows[0];
+  } finally {
+    connection.release();
+  }
+}
+
+// 4. Función para "Comprar" Membresía de Vendedor
+async function upgradeToSeller(userId) {
+  const connection = await pool.getConnection();
+  try {
+    await connection.query(
+      "UPDATE usuarios SET rol = 'VENDEDOR', suscripcion_activa = 1 WHERE id = ?",
+      [userId]
+    );
+    // Devolver usuario actualizado
+    const [rows] = await connection.query(
+      "SELECT id, nombre, email, rol, suscripcion_activa, avatar_url FROM usuarios WHERE id = ?",
+      [userId]
+    );
+    return rows[0];
+  } finally {
+    connection.release();
+  }
+}
+
 module.exports = {
   registerUser,
   loginUser,
+  updateUserProfile,
+  upgradeToSeller,
 };
