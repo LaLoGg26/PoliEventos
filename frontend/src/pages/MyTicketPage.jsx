@@ -13,23 +13,21 @@ function MyTicketsPage() {
   const [loading, setLoading] = useState(true);
 
   const [expandedId, setExpandedId] = useState(null);
-  const [selectedTicket, setSelectedTicket] = useState(null); // Zoom QR
-
-  // ⭐️ ESTADOS PARA LOS NUEVOS MODALES ⭐️
-  const [resendTargetId, setResendTargetId] = useState(null); // ID de la compra a reenviar (abre modal confirm)
-  const [isResending, setIsResending] = useState(false); // Loading del envío
-  const [resendResult, setResendResult] = useState(null); // { type: 'success' | 'error', msg: '' }
+  const [selectedTicket, setSelectedTicket] = useState(null);
+  const [resendingId, setResendingId] = useState(null);
 
   useEffect(() => {
     if (!user) {
       navigate("/login");
       return;
     }
-
     fetch(`${API_URL}/usuario/mis-tickets`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error("Error al obtener tickets");
+        return res.json();
+      })
       .then((data) => {
         const dataLimpia = Array.isArray(data)
           ? data.map((c) => ({ ...c, tickets: c.tickets || [] }))
@@ -46,60 +44,56 @@ function MyTicketsPage() {
   };
 
   const handleQRClick = (ticket) => {
-    if (ticket.uuid && ticket.uuid !== "PENDIENTE") setSelectedTicket(ticket);
+    // Solo abrimos el modal si el ticket es VÁLIDO
+    if (
+      ticket.uuid &&
+      ticket.uuid !== "PENDIENTE" &&
+      ticket.estado === "VALIDO"
+    ) {
+      setSelectedTicket(ticket);
+    }
   };
 
-  // 1. Abrir Modal de Confirmación
-  const openResendModal = (compraId) => {
-    setResendTargetId(compraId);
-    setResendResult(null);
-  };
-
-  // 2. Ejecutar el Reenvío (Confirmado)
-  const confirmResend = async () => {
-    if (!resendTargetId) return;
-
-    setIsResending(true);
+  const handleResend = async (compraId) => {
+    if (!window.confirm("¿Reenviar boletos al correo?")) return;
+    setResendingId(compraId);
     try {
-      const res = await fetch(`${API_URL}/usuario/reenviar-correo`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ compraId: resendTargetId }),
-      });
-
-      // Leemos el texto primero, por si el servidor devuelve HTML de error (500)
-      const text = await res.text();
-
-      try {
-        const data = JSON.parse(text); // Intentamos leerlo como JSON
-        if (res.ok) {
-          setResendResult({ type: "success", msg: data.message });
-          setResendTargetId(null);
-        } else {
-          setResendResult({ type: "error", msg: data.message });
-          setResendTargetId(null);
+      const res = await fetch(
+        `${API_URL.replace(
+          "/api/eventos",
+          "/api/auth"
+        )}/../usuario/reenviar-correo`,
+        {
+          // Ajuste ruta
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ compraId }),
         }
-      } catch {
-        // Si falla el JSON.parse, es que el servidor explotó y mandó HTML
-        console.error("Error crítico del servidor:", text);
-        setResendResult({
-          type: "error",
-          msg: "Error crítico en el servidor. Revisa la terminal.",
-        });
-        setResendTargetId(null);
-      }
+      );
+      // Nota: Asegúrate que tu ruta en el backend coincida con la URL base
+      // Si usas /api/eventos en la constante, la ruta de usuario está ahí.
+      // Ajuste rápido: Usamos la URL directa si la constante apunta a eventos
+      const res2 = await fetch(
+        `${API_URL.replace("/eventos", "")}/usuario/reenviar-correo`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ compraId }),
+        }
+      );
+
+      if (res2.ok) alert("✅ Correo enviado.");
+      else alert("❌ Error al enviar.");
     } catch (err) {
       console.error(err);
-      setResendResult({
-        type: "error",
-        msg: "Error de red o servidor apagado.",
-      });
-      setResendTargetId(null);
     } finally {
-      setIsResending(false);
+      setResendingId(null);
     }
   };
 
@@ -107,28 +101,43 @@ function MyTicketsPage() {
 
   return (
     <div style={styles.container}>
-      {/* --- MODAL 1: ZOOM QR --- */}
+      {/* MODAL ZOOM QR */}
       {selectedTicket && (
         <div
-          style={styles.modalOverlay}
+          style={styles.qrModalOverlay}
           onClick={() => setSelectedTicket(null)}
         >
-          <div style={styles.modalCard} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ marginBottom: "20px" }}>Escanea este código</h3>
+          <div
+            style={styles.qrModalContent}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ marginBottom: "10px", color: "#333" }}>
+              Entrada Válida
+            </h3>
             <div
               style={{
                 padding: "20px",
                 background: "white",
                 display: "inline-block",
                 borderRadius: "10px",
+                border: "5px solid #16a34a",
               }}
             >
               <QRCodeSVG value={selectedTicket.uuid} size={300} />
             </div>
             <p style={styles.modalUuid}>{selectedTicket.uuid}</p>
+            <p
+              style={{
+                color: "#16a34a",
+                fontWeight: "bold",
+                fontSize: "1.2rem",
+              }}
+            >
+              ✅ LISTO PARA ESCANEAR
+            </p>
             <button
               onClick={() => setSelectedTicket(null)}
-              style={styles.closeBtn}
+              style={styles.closeModalBtn}
             >
               Cerrar
             </button>
@@ -136,64 +145,9 @@ function MyTicketsPage() {
         </div>
       )}
 
-      {/* --- MODAL 2: CONFIRMACIÓN DE REENVÍO --- */}
-      {resendTargetId && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modalCard}>
-            <div style={{ fontSize: "3rem", marginBottom: "10px" }}>📧</div>
-            <h3>¿Reenviar Boletos?</h3>
-            <p style={{ color: "#666", marginBottom: "20px" }}>
-              Enviaremos una copia de los boletos a tu correo registrado.
-            </p>
-            <div style={styles.modalActions}>
-              <button
-                onClick={() => setResendTargetId(null)}
-                style={styles.secondaryBtn}
-                disabled={isResending}
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={confirmResend}
-                style={styles.primaryBtn}
-                disabled={isResending}
-              >
-                {isResending ? "Enviando..." : "Sí, Enviar"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- MODAL 3: RESULTADO (ÉXITO O ERROR) --- */}
-      {resendResult && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modalCard}>
-            <div style={{ fontSize: "3rem", marginBottom: "10px" }}>
-              {resendResult.type === "success" ? "✅" : "❌"}
-            </div>
-            <h3>
-              {resendResult.type === "success"
-                ? "¡Correo Enviado!"
-                : "Hubo un problema"}
-            </h3>
-            <p style={{ color: "#666", marginBottom: "20px" }}>
-              {resendResult.msg}
-            </p>
-            <button
-              onClick={() => setResendResult(null)}
-              style={styles.primaryBtn}
-            >
-              Entendido
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* --- CONTENIDO PRINCIPAL --- */}
       <div style={styles.header}>
         <h1>🎟️ Mis Tickets</h1>
-        <p>Toca un código QR para ampliarlo.</p>
+        <p>Gestiona tus entradas y accesos.</p>
       </div>
 
       {compras.length === 0 ? (
@@ -227,10 +181,8 @@ function MyTicketsPage() {
                 <div style={styles.info}>
                   <h3 style={styles.eventName}>{compra.evento_nombre}</h3>
                   <p style={styles.eventDate}>
-                    📅 {new Date(compra.evento_fecha).toLocaleDateString()}
-                  </p>
-                  <p style={styles.zoneInfo}>
-                    {compra.nombre_zona} • {compra.cantidad} boletos
+                    📅 {new Date(compra.evento_fecha).toLocaleDateString()} •{" "}
+                    {compra.cantidad} boletos
                   </p>
                 </div>
                 <button style={styles.expandBtn}>
@@ -241,42 +193,73 @@ function MyTicketsPage() {
               {expandedId === compra.compra_id && (
                 <div style={styles.qrSection}>
                   <div style={{ textAlign: "right", marginBottom: "15px" }}>
-                    {/* Botón que abre el modal de confirmación */}
                     <button
-                      onClick={() => openResendModal(compra.compra_id)}
+                      onClick={() => handleResend(compra.compra_id)}
+                      disabled={resendingId === compra.compra_id}
                       style={styles.resendBtn}
                     >
-                      📩 Reenviar Correo
+                      {resendingId === compra.compra_id
+                        ? "Enviando..."
+                        : "📩 Reenviar PDF al Correo"}
                     </button>
                   </div>
 
-                  {compra.tickets.length === 0 ||
-                  compra.tickets[0].uuid === "PENDIENTE" ? (
-                    <p style={{ textAlign: "center", color: "#d9534f" }}>
-                      ⚠️ Compra antigua sin QR disponible.
-                    </p>
-                  ) : (
-                    <div style={styles.qrGrid}>
-                      {compra.tickets.map((ticket, index) => (
+                  <div style={styles.qrGrid}>
+                    {compra.tickets.map((ticket, index) => {
+                      const isUsed = ticket.estado === "USADO";
+                      return (
                         <div
                           key={index}
-                          style={{ ...styles.qrCard, cursor: "pointer" }}
+                          style={{
+                            ...styles.qrCard,
+                            opacity: isUsed ? 0.6 : 1,
+                            cursor: isUsed ? "default" : "pointer",
+                            borderColor: isUsed ? "#ccc" : "#16a34a",
+                          }}
                           onClick={() => handleQRClick(ticket)}
+                          title={
+                            isUsed
+                              ? "Este boleto ya fue usado"
+                              : "Clic para ampliar"
+                          }
                         >
-                          <div style={styles.qrWrapper}>
-                            <QRCodeSVG
-                              value={ticket.uuid || "error"}
-                              size={100}
-                            />
+                          {/* Etiqueta de Estado */}
+                          <div
+                            style={{
+                              ...styles.statusBadge,
+                              backgroundColor: isUsed ? "#fee2e2" : "#dcfce7",
+                              color: isUsed ? "#dc2626" : "#16a34a",
+                            }}
+                          >
+                            {isUsed ? "USADO" : "VÁLIDO"}
                           </div>
+
+                          <div style={styles.qrWrapper}>
+                            {/* Si está usado, mostramos el QR borroso o gris */}
+                            <div
+                              style={{
+                                opacity: isUsed ? 0.3 : 1,
+                                filter: isUsed ? "grayscale(100%)" : "none",
+                              }}
+                            >
+                              <QRCodeSVG
+                                value={ticket.uuid || "error"}
+                                size={100}
+                              />
+                            </div>
+                            {isUsed && <div style={styles.usedOverlay}>❌</div>}
+                          </div>
+
                           <span style={styles.ticketLabel}>
                             Boleto {index + 1}
                           </span>
-                          <span style={styles.clickHint}>(Ver Grande 🔍)</span>
+                          {!isUsed && (
+                            <span style={styles.clickHint}>(Ver Grande)</span>
+                          )}
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
@@ -293,6 +276,7 @@ const styles = {
     margin: "0 auto",
     padding: "40px 20px",
     minHeight: "80vh",
+    fontFamily: "system-ui, sans-serif",
   },
   center: {
     textAlign: "center",
@@ -320,11 +304,12 @@ const styles = {
   list: { display: "flex", flexDirection: "column", gap: "20px" },
   card: {
     backgroundColor: "white",
-    borderRadius: "12px",
+    borderRadius: "16px",
     boxShadow: "0 4px 10px rgba(0,0,0,0.05)",
     overflow: "hidden",
     border: "1px solid #f3f4f6",
   },
+
   cardHeader: {
     display: "flex",
     alignItems: "center",
@@ -337,7 +322,7 @@ const styles = {
   thumbnail: {
     width: "60px",
     height: "60px",
-    borderRadius: "8px",
+    borderRadius: "12px",
     backgroundSize: "cover",
     backgroundPosition: "center",
     display: "flex",
@@ -348,27 +333,27 @@ const styles = {
     flexShrink: 0,
   },
   info: { flex: 1 },
-  eventName: { margin: "0 0 5px 0", fontSize: "1.1rem", color: "#111" },
-  eventDate: { margin: 0, fontSize: "0.85rem", color: "#666" },
-  zoneInfo: {
-    margin: "5px 0 0 0",
-    fontSize: "0.9rem",
-    fontWeight: "bold",
-    color: "#2563EB",
+  eventName: {
+    margin: "0 0 5px 0",
+    fontSize: "1.1rem",
+    color: "#1e293b",
+    fontWeight: "700",
   },
+  eventDate: { margin: 0, fontSize: "0.9rem", color: "#64748b" },
   expandBtn: {
     background: "none",
     border: "none",
-    color: "#666",
+    color: "#94a3b8",
     cursor: "pointer",
-    fontSize: "1.2rem",
+    fontSize: "1rem",
     fontWeight: "bold",
-    padding: "5px 10px",
+    padding: "5px",
   },
+
   qrSection: {
-    backgroundColor: "#f9fafb",
-    padding: "20px",
-    borderTop: "1px solid #eee",
+    backgroundColor: "#f8fafc",
+    padding: "25px",
+    borderTop: "1px solid #e2e8f0",
     animation: "fadeIn 0.3s",
   },
   qrGrid: {
@@ -377,94 +362,108 @@ const styles = {
     gap: "20px",
     justifyContent: "center",
   },
+
+  // TARJETA DE TICKET INDIVIDUAL
   qrCard: {
     backgroundColor: "white",
     padding: "15px",
-    borderRadius: "8px",
-    boxShadow: "0 2px 5px rgba(0,0,0,0.05)",
+    borderRadius: "12px",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    width: "130px",
+    width: "140px",
+    border: "2px solid transparent",
+    position: "relative",
     transition: "transform 0.2s",
   },
-  qrWrapper: { marginBottom: "10px", padding: "5px", background: "white" },
-  ticketLabel: { fontWeight: "bold", fontSize: "0.9rem", marginBottom: "2px" },
+  qrWrapper: { marginBottom: "10px", padding: "5px", position: "relative" },
+  usedOverlay: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    transform: "translate(-50%, -50%)",
+    fontSize: "3rem",
+    opacity: 0.8,
+  },
+
+  ticketLabel: {
+    fontWeight: "bold",
+    fontSize: "0.9rem",
+    marginBottom: "2px",
+    color: "#334155",
+  },
   clickHint: { fontSize: "0.7rem", color: "#2563EB", fontStyle: "italic" },
 
-  // Estilos Modales
-  modalOverlay: {
+  statusBadge: {
+    fontSize: "0.7rem",
+    padding: "2px 8px",
+    borderRadius: "20px",
+    fontWeight: "bold",
+    marginBottom: "8px",
+    textTransform: "uppercase",
+    letterSpacing: "0.5px",
+  },
+
+  // MODAL
+  qrModalOverlay: {
     position: "fixed",
     top: 0,
     left: 0,
     width: "100%",
     height: "100%",
-    backgroundColor: "rgba(0,0,0,0.7)",
+    backgroundColor: "rgba(0,0,0,0.85)",
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
     zIndex: 3000,
-    backdropFilter: "blur(3px)",
+    backdropFilter: "blur(5px)",
   },
-  modalCard: {
-    backgroundColor: "white",
-    padding: "30px",
-    borderRadius: "16px",
+  qrModalContent: {
+    backgroundColor: "#f4f4f4",
+    padding: "40px",
+    borderRadius: "24px",
     textAlign: "center",
-    width: "90%",
-    maxWidth: "350px",
-    boxShadow: "0 20px 50px rgba(0,0,0,0.3)",
+    maxWidth: "90%",
+    boxShadow: "0 20px 50px rgba(0,0,0,0.5)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
   },
   modalUuid: {
     fontFamily: "monospace",
     fontSize: "0.9rem",
-    margin: "15px 0",
+    margin: "15px 0 5px",
     color: "#555",
     wordBreak: "break-all",
+    background: "#e2e8f0",
+    padding: "5px 10px",
+    borderRadius: "5px",
   },
-  modalActions: { display: "flex", gap: "10px", justifyContent: "center" },
-
-  // Botones
-  closeBtn: {
-    padding: "10px 25px",
-    backgroundColor: "#333",
+  closeModalBtn: {
+    padding: "12px 35px",
+    backgroundColor: "#1e293b",
     color: "white",
     border: "none",
     borderRadius: "50px",
+    fontSize: "1rem",
     cursor: "pointer",
     fontWeight: "bold",
+    marginTop: "20px",
   },
   resendBtn: {
-    backgroundColor: "#4B5563",
-    color: "white",
-    border: "none",
+    backgroundColor: "#fff",
+    color: "#475569",
+    border: "1px solid #cbd5e1",
     padding: "8px 15px",
     borderRadius: "6px",
     cursor: "pointer",
     fontSize: "0.85rem",
-    fontWeight: "bold",
-  },
-  primaryBtn: {
-    padding: "10px 20px",
-    backgroundColor: "#2563EB",
-    color: "white",
-    border: "none",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontWeight: "bold",
-  },
-  secondaryBtn: {
-    padding: "10px 20px",
-    backgroundColor: "#e5e7eb",
-    color: "#333",
-    border: "none",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontWeight: "bold",
+    fontWeight: "600",
   },
 };
 
-// Animación CSS
+// Animación
 const styleSheet = document.createElement("style");
 styleSheet.innerText = `@keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }`;
 document.head.appendChild(styleSheet);
