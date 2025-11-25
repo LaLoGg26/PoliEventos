@@ -2,47 +2,36 @@ const authService = require("../services/auth.service");
 
 // Controlador POST /api/auth/register
 async function register(req, res) {
-  const { nombre, email, password, rol } = req.body;
+  const { nombre, email, password, telefono, rol } = req.body; // 👈 Recibir telefono
 
-  if (!nombre || !email || !password) {
+  if (!nombre || !email || !password || !telefono) {
+    // 👈 Validar telefono
     return res
       .status(400)
       .json({ message: "Todos los campos son requeridos." });
   }
 
   try {
-    // Si no se especifica el rol, se registra como COMPRADOR por defecto
     const defaultRol = rol || "COMPRADOR";
-
-    // Nota: En una aplicación real, solo un SUPER_USER podría asignar otros roles.
-    // Aquí permitiremos crear usuarios por defecto.
 
     const newUser = await authService.registerUser(
       nombre,
       email,
       password,
+      telefono,
       defaultRol
     );
     res.status(201).json({
       message: "Registro exitoso.",
-      user: {
-        id: newUser.id,
-        nombre: newUser.nombre,
-        email: newUser.email,
-        rol: newUser.rol,
-      },
+      user: newUser,
     });
   } catch (error) {
-    // Manejar el error de duplicidad de email
     if (error.message.includes("correo electrónico")) {
       return res.status(409).json({ message: error.message });
     }
-    res
-      .status(500)
-      .json({ message: "Error interno del servidor durante el registro." });
+    res.status(500).json({ message: "Error interno del servidor." });
   }
 }
-
 // Controlador POST /api/auth/login
 async function login(req, res) {
   const { email, password } = req.body;

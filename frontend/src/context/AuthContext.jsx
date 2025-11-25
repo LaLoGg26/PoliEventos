@@ -29,11 +29,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const register = async (nombre, email, password) => {
+  const register = async (nombre, email, password, telefono) => {
     setIsLoading(true);
     setError(null);
     try {
-      return await registerAPI(nombre, email, password);
+      const data = await registerAPI(nombre, email, password, telefono);
+      return data;
     } catch (err) {
       setError(err.message);
       throw err;

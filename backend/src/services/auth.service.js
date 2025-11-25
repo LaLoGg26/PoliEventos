@@ -7,25 +7,28 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const SALT_ROUNDS = 10; // Número de rondas de sal para bcrypt
 
 // 1. Funcion para Registra un nuevo usuario en la DB.
-
-async function registerUser(nombre, email, password, rol = "COMPRADOR") {
+async function registerUser(
+  nombre,
+  email,
+  password,
+  telefono,
+  rol = "COMPRADOR"
+) {
   const connection = await pool.getConnection();
   try {
-    // 1. Hash de la contraseña
-    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 2. Insertar en la DB
     const query =
-      "INSERT INTO usuarios (nombre, email, password, rol) VALUES (?, ?, ?, ?)";
+      "INSERT INTO usuarios (nombre, email, password, telefono, rol) VALUES (?, ?, ?, ?, ?)";
     const [result] = await connection.query(query, [
       nombre,
       email,
       hashedPassword,
+      telefono,
       rol,
     ]);
 
-    // Retornar el ID del nuevo usuario
-    return { id: result.insertId, nombre, email, rol };
+    return { id: result.insertId, nombre, email, telefono, rol };
   } catch (error) {
     if (error.code === "ER_DUP_ENTRY") {
       throw new Error("El correo electrónico ya está registrado.");

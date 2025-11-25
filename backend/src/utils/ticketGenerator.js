@@ -1,29 +1,5 @@
-const PDFDocument = require("pdfkit");
-const QRCode = require("qrcode");
-const nodemailer = require("nodemailer");
-
-// Configuración BREVO (Sendinblue) Definitiva
-const transporter = nodemailer.createTransport({
-  host: "smtp-relay.brevo.com",
-  port: 465,
-  secure: true, // true para 465
-  auth: {
-    user: process.env.EMAIL_USER, // Login de Brevo
-    pass: process.env.EMAIL_PASS, // Clave SMTP
-  },
-  // ⭐️ CONFIGURACIÓN DE RED CRÍTICA ⭐️
-  family: 4, // Forzar IPv4 (Evita ETIMEDOUT en Render)
-  pool: true, // Mantiene la conexión viva
-  maxConnections: 2, // Pocas conexiones simultáneas
-  rateLimit: 2, // Límite de velocidad suave
-  tls: {
-    rejectUnauthorized: false, // Permite certificados flexibles
-  },
-  // ⭐️ CONFIGURACIÓN CRÍTICA PARA RENDER ⭐️
-  pool: true, // Reutilizar conexiones
-  maxConnections: 1, // No saturar a Google
-  family: 4, // Forzar IPv4 (evita errores ETIMEDOUT en la nube)
-});
+const twilio = require("twilio");
+const client = twilio(process.env.TWILIO_SID, process.env.TWILIO_AUTH_TOKEN);
 
 async function generarYEnviarBoleto(
   listaUUIDs,
@@ -34,90 +10,48 @@ async function generarYEnviarBoleto(
 ) {
   return new Promise(async (resolve, reject) => {
     try {
-      // Validación de seguridad
-      if (!process.env.EMAIL_PASS) {
-        console.error("❌ Faltan credenciales de correo.");
-        return resolve(false);
+      // Formatear número para WhatsApp (Twilio requiere formato E.164, ej: +52155...)
+      // Asumimos que el usuario lo ingresó bien o le agregamos el prefijo si falta.
+      // Para México es +521 + 10 dígitos.
+      let telefonoDestino = usuario.telefono;
+
+      // Un fix simple para asegurar que tenga el formato de whatsapp
+      if (!telefonoDestino.startsWith("whatsapp:")) {
+        telefonoDestino = `whatsapp:${telefonoDestino}`;
       }
 
-      const doc = new PDFDocument({ size: "A4", margin: 0 });
-      const buffers = [];
+      const mensaje = `
+🎫 *¡Hola ${usuario.nombre}! Gracias por tu compra en PoliEventos.*
 
-      doc.on("data", buffers.push.bind(buffers));
-      doc.on("end", async () => {
-        const pdfData = Buffer.concat(buffers);
-        try {
-          console.log(`📧 Conectando a Brevo para enviar a: ${usuario.email}`);
+Has adquirido entradas para:
+🎉 *${evento.nombre}*
+📍 ${evento.lugar}
+📅 ${new Date(evento.fecha).toLocaleString()}
 
-          await transporter.sendMail({
-            from: `"Poli Eventos" <${process.env.EMAIL_USER}>`, // Remitente (Tu Gmail)
-            to: usuario.email,
-            subject: `🎟️ Tus boletos para: ${evento.nombre}`,
-            html: `
-                            <div style="font-family: Arial, sans-serif; color: #333;">
-                                <h1>¡Hola ${usuario.nombre}!</h1>
-                                <p>Gracias por tu compra. Aquí tienes tus entradas para <strong>${evento.nombre}</strong>.</p>
-                                <p>Adjunto encontrarás el PDF con tus boletos.</p>
-                            </div>
-                        `,
-            attachments: [{ filename: "Boletos.pdf", content: pdfData }],
-          });
+🎟️ *Cantidad:* ${datosCompra.cantidad} boletos (${tipoBoleto.nombre_zona})
+💰 *Total:* $${datosCompra.total}
 
-          console.log("✅ Correo enviado exitosamente.");
-          resolve(true);
-        } catch (error) {
-          console.error("❌ Error enviando email:", error);
-          // No rechazamos para no romper el flujo de compra
-          resolve(false);
-        }
+👇 *TUS BOLETOS ESTÁN AQUÍ:*
+${process.env.FRONTEND_URL || "https://tu-proyecto.vercel.app"}/mis-tickets
+
+_Muestra el código QR de esa página en la entrada._
+Orden #${datosCompra.id_compra}
+            `.trim();
+
+      console.log(`📱 Enviando WhatsApp a: ${telefonoDestino}`);
+
+      const message = await client.messages.create({
+        body: mensaje,
+        from: process.env.TWILIO_WHATSAPP_NUMBER, // Tu número de Sandbox
+        to: telefonoDestino,
       });
 
-      // --- DISEÑO DEL PDF ---
-      const primaryColor = "#2563EB";
-      const grayColor = "#444444";
-
-      for (let i = 0; i < listaUUIDs.length; i++) {
-        const uuidActual = listaUUIDs[i];
-        if (i > 0) doc.addPage();
-
-        doc.rect(0, 0, 600, 100).fill(primaryColor);
-        doc
-          .fontSize(28)
-          .fillColor("white")
-          .font("Helvetica-Bold")
-          .text("Poli Eventos", 0, 35, { align: "center" });
-
-        doc.roundedRect(50, 130, 500, 600, 10).stroke("#dddddd");
-
-        doc.moveDown(3);
-        doc
-          .fillColor("black")
-          .fontSize(22)
-          .font("Helvetica-Bold")
-          .text(evento.nombre, { align: "center" });
-
-        const startY = 220;
-        doc.fontSize(12).font("Helvetica-Bold").fillColor(grayColor);
-        doc.text("LUGAR:", 100, startY);
-        doc.font("Helvetica").text(evento.lugar, 200, startY);
-        doc.font("Helvetica-Bold").text("FECHA:", 100, startY + 30);
-        doc
-          .font("Helvetica")
-          .text(new Date(evento.fecha).toLocaleString(), 200, startY + 30);
-        doc.font("Helvetica-Bold").text("ZONA:", 100, startY + 60);
-        doc.font("Helvetica").text(tipoBoleto.nombre_zona, 200, startY + 60);
-
-        const qrDataUrl = await QRCode.toDataURL(uuidActual);
-        doc.image(qrDataUrl, 195, 380, { fit: [200, 200], align: "center" });
-        doc
-          .fontSize(10)
-          .fillColor("#777")
-          .text(uuidActual, 0, 600, { align: "center" });
-      }
-      doc.end();
+      console.log("✅ WhatsApp enviado, SID:", message.sid);
+      resolve(true);
     } catch (error) {
-      console.error("Error generando PDF:", error);
-      reject(error);
+      console.error("❌ Error enviando WhatsApp:", error);
+      // No rechazamos para no romper la compra
+      resolve(false);
     }
   });
 }

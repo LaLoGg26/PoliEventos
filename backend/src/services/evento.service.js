@@ -67,7 +67,7 @@ async function comprarBoletos(usuarioId, boletoId, cantidad) {
 
     // E. Preparar datos para correo
     const [userData] = await connection.query(
-      "SELECT nombre, email FROM usuarios WHERE id = ?",
+      "SELECT nombre, email, telefono FROM usuarios WHERE id = ?",
       [usuarioId]
     );
     const [eventoData] = await connection.query(

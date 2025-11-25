@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 function RegisterPage() {
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
+  const [telefono, setTelefono] = useState("");
   const [password, setPassword] = useState("");
   const { register, isLoading, error } = useAuth();
   const [success, setSuccess] = useState(null);
@@ -13,11 +14,12 @@ function RegisterPage() {
     e.preventDefault();
     setSuccess(null);
     try {
-      await register(nombre, email, password);
+      await register(nombre, email, password, telefono);
       setSuccess("¡Cuenta creada! Ahora puedes iniciar sesión.");
       setNombre("");
       setEmail("");
       setPassword("");
+      setTelefono("");
     } catch (err) {
       console.error(err);
     }
@@ -27,8 +29,6 @@ function RegisterPage() {
     <div style={styles.pageContainer}>
       <div style={styles.card}>
         <h2 style={styles.title}>Crear Cuenta 🚀</h2>
-        <p style={styles.subtitle}>Únete para descubrir los mejores eventos</p>
-
         {success && <div style={styles.successAlert}>{success}</div>}
         {error && <div style={styles.errorAlert}>{error}</div>}
 
@@ -44,6 +44,26 @@ function RegisterPage() {
               style={styles.input}
             />
           </div>
+
+          {/* ⭐️ CAMPO TELÉFONO ⭐️ */}
+          <div style={styles.inputGroup}>
+            <label style={styles.label}>
+              WhatsApp (con lada, ej: +52155...)
+            </label>
+            <input
+              type="tel"
+              placeholder="+5215512345678"
+              value={telefono}
+              onChange={(e) => setTelefono(e.target.value)}
+              required
+              style={styles.input}
+            />
+            <small style={{ fontSize: "0.7rem", color: "#666" }}>
+              *IMPORTANTE: Para recibir mensajes en modo prueba, tu número debe
+              unirse al Sandbox de Twilio.
+            </small>
+          </div>
+
           <div style={styles.inputGroup}>
             <label style={styles.label}>Correo Electrónico</label>
             <input
@@ -81,7 +101,6 @@ function RegisterPage() {
   );
 }
 
-// Reutilizamos los estilos del Login para consistencia, pero puedes ajustarlos
 const styles = {
   pageContainer: {
     display: "flex",
@@ -100,19 +119,13 @@ const styles = {
     maxWidth: "400px",
   },
   title: {
-    margin: "0 0 10px 0",
+    margin: "0 0 20px 0",
     color: "#333",
     textAlign: "center",
     fontSize: "1.8rem",
   },
-  subtitle: {
-    margin: "0 0 30px 0",
-    color: "#666",
-    textAlign: "center",
-    fontSize: "0.95rem",
-  },
-  form: { display: "flex", flexDirection: "column", gap: "20px" },
-  inputGroup: { display: "flex", flexDirection: "column", gap: "8px" },
+  form: { display: "flex", flexDirection: "column", gap: "15px" },
+  inputGroup: { display: "flex", flexDirection: "column", gap: "5px" },
   label: { fontSize: "0.9rem", fontWeight: "600", color: "#444" },
   input: {
     padding: "12px 15px",
@@ -126,12 +139,11 @@ const styles = {
     padding: "14px",
     backgroundColor: "#10B981",
     color: "white",
-    border: "none", // Verde para registro
+    border: "none",
     borderRadius: "8px",
     cursor: "pointer",
     fontSize: "1rem",
     fontWeight: "600",
-    transition: "background 0.3s",
     marginTop: "10px",
   },
   errorAlert: {
@@ -141,7 +153,7 @@ const styles = {
     borderRadius: "8px",
     fontSize: "0.9rem",
     textAlign: "center",
-    marginBottom: "20px",
+    marginBottom: "10px",
   },
   successAlert: {
     backgroundColor: "#D1FAE5",
@@ -150,7 +162,7 @@ const styles = {
     borderRadius: "8px",
     fontSize: "0.9rem",
     textAlign: "center",
-    marginBottom: "20px",
+    marginBottom: "10px",
   },
   footerText: {
     marginTop: "25px",
@@ -160,4 +172,5 @@ const styles = {
   },
   link: { color: "#10B981", textDecoration: "none", fontWeight: "600" },
 };
+
 export default RegisterPage;
