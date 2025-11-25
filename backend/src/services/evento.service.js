@@ -146,24 +146,68 @@ async function createEvento(
   }
 }
 
-// 5. Dashboard
+// 5. Obtener eventos para el Dashboard (CON DESGLOSE DETALLADO)
 async function getEventsForDashboard(userId, userRole) {
   let query;
   const params = [];
+
+  // Subconsulta para traer el desglose de boletos como JSON
+  const desgloseQuery = `
+        (
+            SELECT JSON_ARRAYAGG(
+                JSON_OBJECT(
+                    'zona', b.nombre_zona, 
+                    'vendidos', b.cantidad_vendida,
+                    'total', b.cantidad_total,
+                    'ingresos', (b.cantidad_vendida * b.precio)
+                )
+            )
+            FROM boletos b
+            WHERE b.evento_id = e.id
+        ) as desglose
+    `;
+
+  const baseSelect = `
+        SELECT 
+            e.id, e.nombre, e.fecha, e.lugar,
+            -- Suma total de ingresos
+            (SELECT COALESCE(SUM(cantidad_vendida * precio), 0) FROM boletos WHERE evento_id = e.id) as ganancias,
+            -- Suma total de boletos vendidos
+            (SELECT COALESCE(SUM(cantidad_vendida), 0) FROM boletos WHERE evento_id = e.id) as vendidos,
+            ${desgloseQuery}
+    `;
+
   if (userRole === "SUPER_USER") {
     query = `
-            SELECT e.id, e.nombre, e.fecha, e.lugar, u.nombre as vendedor_nombre, u.email as vendedor_email
-            FROM eventos e JOIN usuarios u ON e.usuario_id = u.id ORDER BY e.fecha DESC
+            ${baseSelect}, u.nombre as vendedor_nombre, u.email as vendedor_email 
+            FROM eventos e
+            JOIN usuarios u ON e.usuario_id = u.id
+            ORDER BY e.fecha DESC
         `;
   } else {
-    query =
-      "SELECT id, nombre, fecha, lugar FROM eventos WHERE usuario_id = ? ORDER BY fecha DESC";
+    query = `
+            ${baseSelect}
+            FROM eventos e
+            WHERE e.usuario_id = ? 
+            ORDER BY e.fecha DESC
+        `;
     params.push(userId);
   }
-  const [rows] = await pool.query(query, params);
-  return rows;
-}
 
+  const [rows] = await pool.query(query, params);
+
+  // Parsear los resultados numéricos y el JSON
+  return rows.map((row) => ({
+    ...row,
+    vendidos: Number(row.vendidos),
+    ganancias: Number(row.ganancias),
+    // MySQL devuelve el JSON como string a veces, aseguramos parseo
+    desglose:
+      typeof row.desglose === "string"
+        ? JSON.parse(row.desglose)
+        : row.desglose,
+  }));
+}
 // 6. Eliminar Evento
 async function deleteEvento(eventoId, userId, userRole, password) {
   const connection = await pool.getConnection();

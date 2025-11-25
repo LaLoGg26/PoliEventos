@@ -1,6 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
 
 const API_URL =
   (import.meta.env.VITE_API_URL || "http://localhost:3001") + "/api/eventos";
@@ -10,11 +20,10 @@ function SellerDashboard() {
   const navigate = useNavigate();
   const [eventos, setEventos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
 
-  // Verificar si es admin para mostrar columnas extra
   const isSuper = user?.rol === "SUPER_USER";
 
-  // Protección de ruta
   useEffect(() => {
     if (!user || (user.rol !== "VENDEDOR" && user.rol !== "SUPER_USER")) {
       navigate("/");
@@ -23,7 +32,6 @@ function SellerDashboard() {
     }
   }, [user]);
 
-  // Cargar eventos desde el backend
   const cargarMisEventos = async () => {
     try {
       const res = await fetch(`${API_URL}/dashboard/mis-eventos`, {
@@ -38,21 +46,11 @@ function SellerDashboard() {
     }
   };
 
-  // Función para borrar evento (con confirmación de contraseña)
   const handleDelete = async (id, nombreEvento) => {
-    if (
-      !window.confirm(
-        `¿Estás seguro de eliminar el evento "${nombreEvento}"? Se borrará TODO el historial de compras y boletos asociados.`
-      )
-    )
-      return;
-
+    if (!window.confirm(`¿Eliminar "${nombreEvento}"?`)) return;
     try {
-      const password = prompt(
-        "Por seguridad, ingresa TU contraseña para confirmar el borrado:"
-      );
-      if (!password) return; // Si cancela el prompt
-
+      const password = prompt("🔒 Confirma con tu contraseña:");
+      if (!password) return;
       const res = await fetch(`${API_URL}/${id}`, {
         method: "DELETE",
         headers: {
@@ -61,291 +59,337 @@ function SellerDashboard() {
         },
         body: JSON.stringify({ password }),
       });
-
-      const result = await res.json();
-
       if (res.ok) {
-        // Borrado exitoso: quitar de la lista localmente
-        setEventos(eventos.filter((e) => e.id !== id));
-        alert("Evento eliminado correctamente.");
+        setEventos((prev) => prev.filter((e) => e.id !== id));
+        alert("Evento eliminado.");
       } else {
-        // Error (ej. contraseña incorrecta)
-        alert("Error: " + result.message);
+        alert("Error al eliminar");
       }
     } catch (err) {
       console.error(err);
-      alert("Error de conexión.");
     }
   };
 
+  // --- ESTADÍSTICAS ---
+  const eventosFiltrados = useMemo(
+    () =>
+      eventos.filter((e) =>
+        e.nombre.toLowerCase().includes(searchTerm.toLowerCase())
+      ),
+    [eventos, searchTerm]
+  );
+
+  const stats = useMemo(() => {
+    const totalGanancias = eventos.reduce(
+      (acc, curr) => acc + curr.ganancias,
+      0
+    );
+    const totalBoletos = eventos.reduce((acc, curr) => acc + curr.vendidos, 0);
+    return { totalGanancias, totalBoletos, totalEventos: eventos.length };
+  }, [eventos]);
+
+  // Gráfica simplificada: Solo Ingresos por Evento
+  const dataGrafica = eventos.slice(0, 8).map((e) => ({
+    name: e.nombre.length > 10 ? e.nombre.substring(0, 10) + "..." : e.nombre,
+    Ingresos: e.ganancias,
+  }));
+
   if (loading)
     return (
-      <div
-        style={{
-          padding: "60px",
-          textAlign: "center",
-          color: "#666",
-          fontSize: "1.2rem",
-        }}
-      >
-        Cargando panel...
-      </div>
+      <div style={{ padding: "60px", textAlign: "center" }}>Cargando...</div>
     );
 
   return (
     <div className="dashboard-container">
-      {/* ESTILOS CSS INTEGRADOS */}
       <style>{`
-        .dashboard-container {
-            max-width: 1200px;
-            margin: 40px auto;
-            padding: 0 20px;
-            min-height: 80vh;
-            font-family: system-ui, -apple-system, sans-serif;
-        }
+        .dashboard-container { max-width: 1200px; margin: 40px auto; padding: 0 20px; min-height: 80vh; font-family: 'Segoe UI', system-ui, sans-serif; }
         
-        /* CABECERA DEL DASHBOARD */
-        .header-dash {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-            background-color: white;
-            padding: 25px;
-            border-radius: 16px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.03);
-            border: 1px solid #f1f5f9;
-            flex-wrap: wrap; gap: 20px;
-        }
-        .header-dash h1 { margin: 0; font-size: 1.8rem; color: #1e293b; font-weight: 800; }
+        /* Header */
+        .header-dash { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; flex-wrap: wrap; gap: 20px; }
+        .header-title h1 { margin: 0; font-size: 1.8rem; color: #1e293b; font-weight: 800; }
+        .search-input { padding: 10px 20px; border-radius: 50px; border: 1px solid #e2e8f0; width: 300px; outline: none; }
         
-        .header-actions { display: flex; gap: 15px; }
+        .action-group { display: flex; gap: 10px; }
+        .create-btn { background: #2563EB; color: white; padding: 10px 20px; border-radius: 50px; text-decoration: none; font-weight: bold; display: flex; align-items: center; gap: 5px; }
+        .scan-btn { background: #1e293b; color: white; padding: 10px 20px; border-radius: 50px; text-decoration: none; font-weight: bold; display: flex; align-items: center; gap: 5px; }
 
-        .action-btn {
-            text-decoration: none; padding: 12px 24px; border-radius: 50px; font-weight: bold; font-size: 0.95rem;
-            transition: all 0.2s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            display: inline-flex; align-items: center; gap: 8px; cursor: pointer; border: none;
-        }
-        .create-btn { background-color: #2563EB; color: white; }
-        .create-btn:hover { background-color: #1d4ed8; transform: translateY(-2px); }
-        .scan-btn { background-color: #111; color: white; }
-        .scan-btn:hover { background-color: #333; transform: translateY(-2px); }
+        /* Stats Cards */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 40px; }
+        .stat-card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); border: 1px solid #f1f5f9; text-align: center; }
+        .stat-val { font-size: 1.8rem; font-weight: 800; color: #0f172a; }
+        .stat-lbl { font-size: 0.85rem; color: #64748b; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
 
-        /* --- TABLA ESCRITORIO (Se oculta en móvil) --- */
-        .desktop-table {
-            width: 100%; border-collapse: collapse; background-color: white;
-            border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-            border: 1px solid #e2e8f0;
-        }
-        .desktop-table th { 
-            background-color: #f8fafc; text-align: left; padding: 18px; 
-            color: #64748b; font-size: 0.85rem; text-transform: uppercase; 
-            font-weight: 700; border-bottom: 1px solid #e2e8f0; 
-        }
-        .desktop-table td { 
-            padding: 18px; border-bottom: 1px solid #f1f5f9; color: #334155; vertical-align: middle; 
-        }
-        .desktop-table tr:last-child td { border-bottom: none; }
+        /* Gráfica */
+        .chart-section { background: white; padding: 25px; border-radius: 16px; border: 1px solid #f1f5f9; box-shadow: 0 4px 15px rgba(0,0,0,0.03); margin-bottom: 40px; height: 350px; }
         
-        .event-link { font-weight: 700; color: #0f172a; text-decoration: none; font-size: 1.05rem; }
-        .event-link:hover { color: #2563EB; text-decoration: underline; }
+        /* Tabla */
+        .table-container { background: white; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; }
+        .responsive-table { width: 100%; border-collapse: collapse; }
+        .responsive-table th { background: #f8fafc; padding: 15px; text-align: left; color: #64748b; font-size: 0.8rem; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; }
+        .responsive-table td { padding: 15px; border-bottom: 1px solid #f1f5f9; color: #334155; vertical-align: middle; }
+        
+        /* Estilos del Desglose de Boletos */
+        .ticket-breakdown { display: flex; flex-direction: column; gap: 5px; }
+        .breakdown-item { display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; }
+        .zone-name { font-weight: 600; color: #475569; }
+        .zone-count { background: #e0e7ff; color: #3730a3; padding: 2px 8px; border-radius: 10px; font-weight: bold; font-size: 0.75rem; }
+        .progress-bg { width: 100px; height: 6px; background: #f1f5f9; border-radius: 3px; overflow: hidden; margin-left: 10px; }
+        .progress-fill { height: 100%; background: #2563EB; border-radius: 3px; }
 
-        .actions-cell { display: flex; gap: 15px; justify-content: flex-end; }
-        .table-btn {
-            text-decoration: none; font-weight: 600; font-size: 0.9rem; 
-            display: inline-flex; align-items: center; gap: 5px;
-            padding: 8px 12px; border-radius: 8px; transition: background 0.2s;
-        }
-        .edit-action { color: #d97706; background: #fff7ed; }
-        .edit-action:hover { background: #ffedd5; }
-        .delete-action { color: #dc2626; background: #fef2f2; border: none; cursor: pointer; }
-        .delete-action:hover { background: #fee2e2; }
+        .action-icons { display: flex; gap: 10px; justify-content: flex-end; }
+        .btn-icon { cursor: pointer; background: none; border: none; font-size: 1.1rem; transition: transform 0.2s; }
+        .btn-icon:hover { transform: scale(1.2); }
 
-        /* --- TARJETAS MÓVILES (Se ocultan en escritorio) --- */
+        /* Móvil */
         .mobile-cards { display: none; }
-
-        /* MEDIA QUERY: MÓVIL */
         @media (max-width: 768px) {
-            .dashboard-container { margin: 20px auto; }
-            .desktop-table { display: none; } /* Ocultar tabla */
-            .mobile-cards { display: flex; flexDirection: column; gap: 20px; width: 100%; } /* Mostrar tarjetas */
-            
-            .header-dash { flex-direction: column; text-align: center; padding: 20px; }
-            .header-actions { flex-direction: column; width: 100%; }
-            .action-btn { width: 100%; justify-content: center; }
-
-            .event-card {
-                background: white; padding: 20px; border-radius: 16px;
-                box-shadow: 0 4px 10px rgba(0,0,0,0.05); border: 1px solid #f1f5f9; 
-            }
-            .card-header { margin-bottom: 15px; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px; }
-            .card-title { font-size: 1.3rem; font-weight: 800; color: #1e293b; text-decoration: none; display: block; }
-            
-            .card-data { display: flex; flex-direction: column; gap: 8px; color: #64748b; }
-            .card-data span { display: flex; align-items: center; gap: 8px; }
-            
-            .card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
-            .card-btn { padding: 12px; border-radius: 10px; text-align: center; font-weight: bold; text-decoration: none; cursor: pointer; border: 1px solid transparent; }
-            .btn-edit { background: #fff7ed; color: #c2410c; border-color: #ffedd5; }
-            .btn-del { background: #fef2f2; color: #b91c1c; border-color: #fee2e2; }
+            .desktop-table { display: none; }
+            .mobile-cards { display: flex; flexDirection: column; gap: 15px; }
+            .event-card { background: white; padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; }
+            .card-title { font-size: 1.1rem; font-weight: 800; color: #2563EB; display: block; margin-bottom: 10px; text-decoration: none; }
+            .header-dash { flex-direction: column; text-align: center; }
+            .search-input { width: 100%; box-sizing: border-box; }
         }
       `}</style>
 
+      {/* Header */}
       <div className="header-dash">
-        <h1>📊 {isSuper ? "Super Admin Panel" : "Panel de Vendedor"}</h1>
-        <div className="header-actions">
-          {/* Botón Escáner */}
-          <Link to="/scanner" className="action-btn scan-btn">
-            📷 Escanear Boletos
+        <div className="header-title">
+          <h1>📊 {isSuper ? "Admin Global" : "Tu Panel"}</h1>
+        </div>
+        <input
+          type="text"
+          placeholder="🔎 Filtrar eventos..."
+          className="search-input"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+        <div className="action-group">
+          <Link to="/scanner" className="scan-btn">
+            📷 Escáner
           </Link>
-          {/* Botón Nuevo Evento */}
-          <Link to="/create-event" className="action-btn create-btn">
-            <span style={{ fontSize: "1.2rem", lineHeight: 0 }}>+</span> Nuevo
-            Evento
+          <Link to="/create-event" className="create-btn">
+            <span>+</span> Crear
           </Link>
         </div>
       </div>
 
-      {eventos.length === 0 ? (
+      {/* Stats */}
+      <div className="stats-grid">
+        <div className="stat-card">
+          <div className="stat-lbl">Ingresos Totales</div>
+          <div className="stat-val" style={{ color: "#10B981" }}>
+            ${stats.totalGanancias.toLocaleString()}
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-lbl">Boletos Vendidos</div>
+          <div className="stat-val" style={{ color: "#3B82F6" }}>
+            {stats.totalBoletos}
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-lbl">Eventos</div>
+          <div className="stat-val" style={{ color: "#6366f1" }}>
+            {stats.totalEventos}
+          </div>
+        </div>
+      </div>
+
+      {/* Gráfica (Solo Ingresos) */}
+      {eventos.length > 0 && (
+        <div className="chart-section">
+          <h3 style={{ margin: "0 0 20px 0", color: "#333" }}>
+            💰 Ingresos por Evento
+          </h3>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={dataGrafica}>
+              <CartesianGrid
+                strokeDasharray="3 3"
+                vertical={false}
+                stroke="#f1f5f9"
+              />
+              <XAxis
+                dataKey="name"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: "#64748b" }}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: "#64748b" }}
+              />
+              <Tooltip
+                cursor={{ fill: "#f8fafc" }}
+                contentStyle={{
+                  borderRadius: "10px",
+                  border: "none",
+                  boxShadow: "0 5px 15px rgba(0,0,0,0.1)",
+                }}
+              />
+              <Bar
+                dataKey="Ingresos"
+                fill="#10B981"
+                radius={[6, 6, 0, 0]}
+                barSize={40}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Tabla con Desglose */}
+      {eventosFiltrados.length === 0 ? (
         <div
           style={{
             textAlign: "center",
-            padding: "60px 20px",
-            backgroundColor: "white",
+            padding: "50px",
+            background: "white",
             borderRadius: "16px",
-            color: "#666",
-            border: "2px dashed #e2e8f0",
           }}
         >
-          <div style={{ fontSize: "3rem", marginBottom: "10px" }}>🎟️</div>
-          <h3>No tienes eventos activos.</h3>
-          <p>¡Crea tu primer evento y empieza a vender!</p>
+          No hay eventos.
         </div>
       ) : (
         <>
-          {/* --- VISTA DE ESCRITORIO (TABLA) --- */}
-          <table className="desktop-table">
-            <thead>
-              <tr>
-                <th>Evento</th>
-                {/* COLUMNA CONDICIONAL: Solo si es Super Usuario */}
-                {isSuper && <th>Vendedor</th>}
-                <th>Fecha</th>
-                <th>Lugar</th>
-                <th style={{ textAlign: "right" }}>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {eventos.map((evento) => (
-                <tr key={evento.id}>
-                  <td style={{ fontWeight: "500" }}>
-                    <Link to={`/evento/${evento.id}`} className="event-link">
-                      {evento.nombre}
-                    </Link>
-                  </td>
-
-                  {/* DATO CONDICIONAL */}
-                  {isSuper && (
+          <div className="table-container desktop-table">
+            <table className="responsive-table">
+              <thead>
+                <tr>
+                  <th style={{ width: "25%" }}>Evento</th>
+                  <th>Desglose de Ventas</th>
+                  <th>Total $</th>
+                  <th>Fecha</th>
+                  <th style={{ textAlign: "right" }}>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {eventosFiltrados.map((e) => (
+                  <tr key={e.id}>
                     <td>
-                      <div style={{ display: "flex", flexDirection: "column" }}>
-                        <span
-                          style={{
-                            fontWeight: "700",
-                            fontSize: "0.95rem",
-                            color: "#334155",
-                          }}
-                        >
-                          {evento.vendedor_nombre}
-                        </span>
-                        <span style={{ fontSize: "0.85rem", color: "#64748b" }}>
-                          {evento.vendedor_email}
-                        </span>
+                      <Link to={`/evento/${e.id}`} className="event-link">
+                        {e.nombre}
+                      </Link>
+                    </td>
+
+                    {/* COLUMNA NUEVA: DESGLOSE VISUAL */}
+                    <td>
+                      <div className="ticket-breakdown">
+                        {e.desglose &&
+                          e.desglose.map((tipo, idx) => (
+                            <div key={idx} className="breakdown-item">
+                              <span className="zone-name">{tipo.zona}</span>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                }}
+                              >
+                                <span className="zone-count">
+                                  {tipo.vendidos}/{tipo.total}
+                                </span>
+                                {/* Barrita de progreso mini */}
+                                <div className="progress-bg">
+                                  <div
+                                    className="progress-fill"
+                                    style={{
+                                      width: `${Math.min(
+                                        (tipo.vendidos / tipo.total) * 100,
+                                        100
+                                      )}%`,
+                                    }}
+                                  ></div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                       </div>
                     </td>
-                  )}
 
-                  <td>
-                    {new Date(evento.fecha).toLocaleDateString(undefined, {
-                      weekday: "short",
-                      year: "numeric",
-                      month: "short",
-                      day: "numeric",
-                    })}
-                  </td>
-                  <td>{evento.lugar}</td>
-                  <td>
-                    <div className="actions-cell">
+                    <td style={{ fontWeight: "bold", color: "#10B981" }}>
+                      ${e.ganancias.toLocaleString()}
+                    </td>
+                    <td>{new Date(e.fecha).toLocaleDateString()}</td>
+
+                    <td className="actions-cell">
                       <Link
-                        to={`/edit-event/${evento.id}`}
-                        className="table-btn edit-action"
+                        to={`/edit-event/${e.id}`}
+                        className="btn-icon"
+                        title="Editar"
                       >
-                        ✏️ Editar
+                        ✏️
                       </Link>
                       <button
-                        onClick={() => handleDelete(evento.id, evento.nombre)}
-                        className="table-btn delete-action"
+                        onClick={() => handleDelete(e.id, e.nombre)}
+                        className="btn-icon"
+                        title="Borrar"
                       >
-                        🗑️ Borrar
+                        🗑️
                       </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-          {/* --- VISTA MÓVIL (TARJETAS) --- */}
+          {/* Móvil (Simplificado) */}
           <div className="mobile-cards">
-            {eventos.map((evento) => (
-              <div key={evento.id} className="event-card">
-                <div className="card-header">
-                  <Link to={`/evento/${evento.id}`} className="card-title">
-                    {evento.nombre}
-                  </Link>
-                  {/* Etiqueta de vendedor en móvil */}
-                  {isSuper && (
-                    <div
-                      style={{
-                        marginTop: "8px",
-                        fontSize: "0.9rem",
-                        color: "#666",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "5px",
-                      }}
-                    >
-                      👤{" "}
-                      <span style={{ fontWeight: "bold" }}>
-                        {evento.vendedor_nombre}
-                      </span>{" "}
-                      ({evento.vendedor_email})
-                    </div>
-                  )}
+            {eventosFiltrados.map((e) => (
+              <div key={e.id} className="event-card">
+                <Link to={`/evento/${e.id}`} className="card-title">
+                  {e.nombre}
+                </Link>
+                <div
+                  style={{
+                    margin: "10px 0",
+                    padding: "10px",
+                    background: "#f8fafc",
+                    borderRadius: "8px",
+                  }}
+                >
+                  {e.desglose &&
+                    e.desglose.map((tipo, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          fontSize: "0.85rem",
+                          marginBottom: "5px",
+                        }}
+                      >
+                        <span>{tipo.zona}</span>
+                        <strong>{tipo.vendidos} vendidos</strong>
+                      </div>
+                    ))}
                 </div>
-
-                <div className="card-data">
-                  <span>
-                    📅{" "}
-                    {new Date(evento.fecha).toLocaleDateString(undefined, {
-                      weekday: "long",
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    })}
-                  </span>
-                  <span>📍 {evento.lugar}</span>
-                </div>
-
-                <div className="card-actions">
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginTop: "10px",
+                  }}
+                >
                   <Link
-                    to={`/edit-event/${evento.id}`}
-                    className="card-btn btn-edit"
+                    to={`/edit-event/${e.id}`}
+                    style={{
+                      color: "#d97706",
+                      fontWeight: "bold",
+                      textDecoration: "none",
+                    }}
                   >
                     ✏️ Editar
                   </Link>
                   <button
-                    onClick={() => handleDelete(evento.id, evento.nombre)}
-                    className="card-btn btn-del"
+                    onClick={() => handleDelete(e.id, e.nombre)}
+                    style={{
+                      color: "#dc2626",
+                      background: "none",
+                      border: "none",
+                      fontWeight: "bold",
+                    }}
                   >
                     🗑️ Borrar
                   </button>

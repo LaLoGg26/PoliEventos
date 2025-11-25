@@ -59,18 +59,18 @@ Abre tu gestor de base de datos (DataGrip, Workbench, phpMyAdmin) y ejecuta el s
 CREATE DATABASE IF NOT EXISTS ticketera_db;
 USE ticketera_db;
 
--- Tabla de Usuarios
 CREATE TABLE usuarios (
     id INT AUTO_INCREMENT PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
+    telefono VARCHAR(20),
     rol ENUM('SUPER_USER', 'VENDEDOR', 'COMPRADOR') NOT NULL DEFAULT 'COMPRADOR',
-    suscripcion_activa TINYINT(1) NOT NULL DEFAULT 0, -- 0: Inactiva, 1: Activa
+    suscripcion_activa TINYINT(1) NOT NULL DEFAULT 0,
+    avatar_url VARCHAR(255),
     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Tabla de Eventos
 CREATE TABLE eventos (
     id INT AUTO_INCREMENT PRIMARY KEY,
     nombre VARCHAR(255) NOT NULL,
@@ -78,12 +78,13 @@ CREATE TABLE eventos (
     fecha DATETIME NOT NULL,
     lugar VARCHAR(150) NOT NULL,
     imagen_url VARCHAR(255),
+    latitud DECIMAL(10, 8),
+    longitud DECIMAL(11, 8),
     usuario_id INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
 );
 
--- Tabla de Boletos
 CREATE TABLE boletos (
     id INT AUTO_INCREMENT PRIMARY KEY,
     evento_id INT NOT NULL,
@@ -91,8 +92,28 @@ CREATE TABLE boletos (
     precio DECIMAL(10, 2) NOT NULL,
     cantidad_total INT NOT NULL,
     cantidad_vendida INT DEFAULT 0,
-    CHECK (cantidad_vendida <= cantidad_total),
+    activo TINYINT(1) NOT NULL DEFAULT 1,
     FOREIGN KEY (evento_id) REFERENCES eventos(id) ON DELETE CASCADE
+);
+
+CREATE TABLE compras (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    usuario_id INT NULL,
+    boleto_id INT NOT NULL,
+    cantidad INT NOT NULL,
+    total DECIMAL(10, 2) NOT NULL,
+    uuid_unico VARCHAR(100),
+    fecha_compra TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL,
+    FOREIGN KEY (boleto_id) REFERENCES boletos(id) ON DELETE CASCADE
+);
+
+CREATE TABLE tickets (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    compra_id INT NOT NULL,
+    uuid_unico VARCHAR(100) NOT NULL UNIQUE,
+    estado ENUM('VALIDO', 'USADO') DEFAULT 'VALIDO',
+    FOREIGN KEY (compra_id) REFERENCES compras(id) ON DELETE CASCADE
 );
 ```
 
