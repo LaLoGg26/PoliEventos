@@ -28,6 +28,12 @@ router.post(
 ); // 👈 NUEVA RUTA
 router.post("/comprar", protect, eventoController.postComprarBoletos);
 
+router.post(
+  "/usuario/reenviar-whatsapp",
+  protect,
+  eventoController.postReenviarWhatsapp
+);
+
 // RUTAS GENERALES
 router.get("/", eventoController.getEventos);
 router.post(

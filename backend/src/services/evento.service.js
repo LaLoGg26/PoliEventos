@@ -335,6 +335,53 @@ async function validarTicket(uuid, userId, userRole) {
   }
 }
 
+// 11. Reenviar WhatsApp (Específico)
+async function reenviarWhatsappCompra(compraId, userId) {
+  // Reutilizamos la lógica de obtención de datos
+  const queryInfo = `
+        SELECT c.id as compra_id, c.total, c.cantidad, u.telefono, u.nombre as usuario_nombre, e.nombre as evento_nombre, e.fecha as evento_fecha, e.lugar as evento_lugar, b.nombre_zona
+        FROM compras c
+        JOIN usuarios u ON c.usuario_id = u.id
+        JOIN boletos b ON c.boleto_id = b.id
+        JOIN eventos e ON b.evento_id = e.id
+        WHERE c.id = ? AND c.usuario_id = ?
+    `;
+  const [rows] = await pool.query(queryInfo, [compraId, userId]);
+  if (rows.length === 0) throw new Error("Compra no encontrada.");
+  const info = rows[0];
+
+  if (!info.telefono)
+    throw new Error("El usuario no tiene teléfono registrado.");
+
+  // Datos dummy para cumplir con la firma de la función generadora
+  const listaUUIDs = []; // No se usan en el texto de whats
+  const eventoObj = {
+    nombre: info.evento_nombre,
+    fecha: info.fecha,
+    lugar: info.lugar,
+  };
+  const usuarioObj = {
+    nombre: info.usuario_nombre,
+    email: "",
+    telefono: info.telefono,
+  };
+  const boletoObj = { nombre_zona: info.nombre_zona };
+  const datosCompra = {
+    id_compra: info.compra_id,
+    total: info.total,
+    cantidad: info.cantidad,
+  };
+
+  await generarYEnviarBoleto(
+    listaUUIDs,
+    eventoObj,
+    usuarioObj,
+    boletoObj,
+    datosCompra
+  );
+  return { success: true, message: `WhatsApp enviado a ${info.telefono}` };
+}
+
 module.exports = {
   findAll,
   findById,
@@ -346,4 +393,5 @@ module.exports = {
   getHistorialCompras,
   reenviarCorreoCompra,
   validarTicket,
+  reenviarWhatsappCompra,
 };

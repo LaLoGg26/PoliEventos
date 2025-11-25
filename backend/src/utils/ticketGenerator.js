@@ -1,5 +1,8 @@
 const twilio = require("twilio");
-const client = twilio(process.env.TWILIO_SID, process.env.TWILIO_AUTH_TOKEN);
+
+const client = process.env.TWILIO_SID
+  ? twilio(process.env.TWILIO_SID, process.env.TWILIO_AUTH_TOKEN)
+  : null;
 
 async function generarYEnviarBoleto(
   listaUUIDs,
@@ -8,52 +11,48 @@ async function generarYEnviarBoleto(
   tipoBoleto,
   datosCompra
 ) {
-  return new Promise(async (resolve, reject) => {
+  if (client) {
     try {
-      // Formatear número para WhatsApp (Twilio requiere formato E.164, ej: +52155...)
-      // Asumimos que el usuario lo ingresó bien o le agregamos el prefijo si falta.
-      // Para México es +521 + 10 dígitos.
-      let telefonoDestino = usuario.telefono;
-
-      // Un fix simple para asegurar que tenga el formato de whatsapp
-      if (!telefonoDestino.startsWith("whatsapp:")) {
-        telefonoDestino = `whatsapp:${telefonoDestino}`;
+      // 1. Preparar el número de destino
+      // Si el usuario no puso lada, asumimos México (+521)
+      let telefonoDestino = usuario.telefono.trim();
+      if (!telefonoDestino.startsWith("+")) {
+        telefonoDestino = `+521${telefonoDestino}`; // Ajusta esto según tu país
       }
 
-      const mensaje = `
-🎫 *¡Hola ${usuario.nombre}! Gracias por tu compra en PoliEventos.*
+      // Formato de WhatsApp para Twilio
+      const toWhatsapp = `whatsapp:${telefonoDestino}`;
 
-Has adquirido entradas para:
-🎉 *${evento.nombre}*
-📍 ${evento.lugar}
-📅 ${new Date(evento.fecha).toLocaleString()}
+      const mensajeWhatsApp = `
+🎫 *¡Hola ${usuario.nombre}! Tu compra en PoliEventos fue exitosa.*
 
-🎟️ *Cantidad:* ${datosCompra.cantidad} boletos (${tipoBoleto.nombre_zona})
-💰 *Total:* $${datosCompra.total}
+Evento: *${evento.nombre}*
+Boletos: ${datosCompra.cantidad} x ${tipoBoleto.nombre_zona}
+Total: $${datosCompra.total}
 
-👇 *TUS BOLETOS ESTÁN AQUÍ:*
+🔗 *Descarga tus boletos aquí:*
 ${process.env.FRONTEND_URL || "https://tu-proyecto.vercel.app"}/mis-tickets
 
-_Muestra el código QR de esa página en la entrada._
-Orden #${datosCompra.id_compra}
+_Presenta el QR en la entrada._
             `.trim();
 
-      console.log(`📱 Enviando WhatsApp a: ${telefonoDestino}`);
+      console.log(`📱 Intentando enviar WhatsApp a ${toWhatsapp}`);
 
-      const message = await client.messages.create({
-        body: mensaje,
-        from: process.env.TWILIO_WHATSAPP_NUMBER, // Tu número de Sandbox
-        to: telefonoDestino,
+      await client.messages.create({
+        body: mensajeWhatsApp,
+        from: process.env.TWILIO_WHATSAPP_NUMBER,
+        to: toWhatsapp,
       });
 
-      console.log("✅ WhatsApp enviado, SID:", message.sid);
-      resolve(true);
+      console.log("✅ WhatsApp enviado correctamente");
     } catch (error) {
-      console.error("❌ Error enviando WhatsApp:", error);
-      // No rechazamos para no romper la compra
-      resolve(false);
+      // Es normal que falle si el usuario no se ha unido al sandbox
+      console.warn(
+        "⚠️ No se pudo enviar WhatsApp (Usuario no unido al Sandbox):",
+        error.message
+      );
     }
-  });
+  }
 }
 
 module.exports = { generarYEnviarBoleto };

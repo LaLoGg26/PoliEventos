@@ -3,13 +3,12 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { getEventoById, comprarBoletosAPI } from "../services/eventoService";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-import { useAuth } from "../context/AuthContext"; // 1. Importar Auth
+import { useAuth } from "../context/AuthContext";
 
-// Fix para iconos de Leaflet
+// Fix iconos
 import L from "leaflet";
 import icon from "leaflet/dist/images/marker-icon.png";
 import iconShadow from "leaflet/dist/images/marker-shadow.png";
-
 let DefaultIcon = L.icon({
   iconUrl: icon,
   shadowUrl: iconShadow,
@@ -18,19 +17,24 @@ let DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
+// ⚠️ CONFIGURA ESTO CON TU DATO DE TWILIO ⚠️
+const TWILIO_SANDBOX_CODE = "join particular-owl"; // Reemplaza con tu código real
+const TWILIO_NUMBER = "+14155238886";
+
 function EventDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-
-  // 2. Obtener usuario y token
   const { user, token } = useAuth();
 
   const [evento, setEvento] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
   const [cantidad, setCantidad] = useState(1);
-  const [mensajeCompra, setMensajeCompra] = useState(null);
+
+  // Estados para el Modal de WhatsApp
+  const [showWhatsappModal, setShowWhatsappModal] = useState(false);
+  const [lastPurchaseId, setLastPurchaseId] = useState(null);
+  const [sendingWhats, setSendingWhats] = useState(false);
 
   const cargarEvento = async () => {
     try {
@@ -38,8 +42,7 @@ function EventDetailPage() {
       setEvento(data);
       setError(null);
     } catch (err) {
-      setError("No se pudo cargar el evento.");
-      console.error(err);
+      setError("Error al cargar evento.");
     } finally {
       setLoading(false);
     }
@@ -50,28 +53,41 @@ function EventDetailPage() {
   }, [id]);
 
   const handleComprar = async (boletoId) => {
-    setMensajeCompra(null);
-
-    // 3. Verificación de Sesión
     if (!user || !token) {
-      alert("Debes iniciar sesión para comprar boletos.");
+      alert("Inicia sesión para comprar.");
       navigate("/login");
       return;
     }
-
     if (cantidad <= 0) return;
 
     try {
-      // 4. Enviar Token a la API
+      // Nota: Ahora la función retorna el ID de compra si modificamos el backend para ello,
+      // o asumimos que fue la última.
+      // Para este flujo, asumimos éxito y mostramos el modal.
       const result = await comprarBoletosAPI(boletoId, cantidad, token);
-      setMensajeCompra({ type: "success", text: result.message });
 
-      // Recargar datos para actualizar stock
+      // Si el backend nos devuelve el ID de la compra en 'result', lo usamos.
+      // Si no, tendremos que confiar en el flujo. (Idealmente el backend debería devolver { success: true, compraId: 123 })
+
+      // Hack rápido para MVP: Si la compra fue exitosa, mostramos el modal.
+      // Usaremos un reenvío manual si es necesario.
+
       await cargarEvento();
       setCantidad(1);
+      setShowWhatsappModal(true); // 👈 ABRIR MODAL
     } catch (error) {
-      setMensajeCompra({ type: "error", text: error.message });
+      alert(error.message);
     }
+  };
+
+  // Función para activar el envío manual desde el modal
+  const triggerWhatsappSend = async () => {
+    // Como no tenemos el ID de compra exacto aquí (a menos que actualicemos el return del backend),
+    // podemos hacer un truco: Obtener la última compra del usuario.
+    // O simplemente dirigir al usuario a "Mis Tickets".
+
+    // Para este MVP, lo mejor es dirigirlo a la wallet.
+    navigate("/mis-tickets");
   };
 
   if (loading)
@@ -89,18 +105,61 @@ function EventDetailPage() {
   if (!evento)
     return (
       <div style={styles.center}>
-        <h2>Evento no encontrado.</h2>
+        <h2>No encontrado</h2>
       </div>
     );
 
   return (
     <div style={styles.container}>
+      {/* ⭐️ MODAL DE WHATSAPP ⭐️ */}
+      {showWhatsappModal && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalCard}>
+            <div style={{ fontSize: "3rem", marginBottom: "10px" }}>📱</div>
+            <h2 style={{ margin: "0 0 10px 0", color: "#25D366" }}>
+              ¡Compra Exitosa!
+            </h2>
+            <p style={{ marginBottom: "20px", color: "#555" }}>
+              Para recibir tus boletos en WhatsApp, debes activar el servicio
+              (Solo 1 vez).
+            </p>
+
+            <div style={styles.stepBox}>
+              <strong>Paso 1:</strong> Envía el código al Sandbox.
+              <a
+                href={`https://wa.me/${TWILIO_NUMBER}?text=${encodeURIComponent(
+                  TWILIO_SANDBOX_CODE
+                )}`}
+                target="_blank"
+                rel="noreferrer"
+                style={styles.whatsappBtn}
+              >
+                👉 Abrir WhatsApp y Enviar Código
+              </a>
+            </div>
+
+            <div style={styles.stepBox}>
+              <strong>Paso 2:</strong> Una vez enviado, ve a tus tickets.
+              <button onClick={triggerWhatsappSend} style={styles.primaryBtn}>
+                Ir a Mis Tickets
+              </button>
+            </div>
+
+            <button
+              onClick={() => setShowWhatsappModal(false)}
+              style={styles.closeLink}
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
+
       <Link to="/" style={styles.backLink}>
-        ← Volver a Eventos
+        ← Volver
       </Link>
 
       <div style={styles.layout}>
-        {/* --- Columna Izquierda: Información --- */}
         <div style={styles.eventInfo}>
           <div style={styles.imageContainer}>
             {evento.imagen_url ? (
@@ -110,28 +169,18 @@ function EventDetailPage() {
                 style={styles.eventImage}
               />
             ) : (
-              <div style={styles.imagePlaceholder}>🎟️ Sin Imagen</div>
+              <div style={styles.imagePlaceholder}>🎟️</div>
             )}
           </div>
-
           <h1 style={styles.title}>{evento.nombre}</h1>
           <div style={styles.meta}>
-            <p>
-              📍 <strong>Lugar:</strong> {evento.lugar}
-            </p>
-            <p>
-              🗓️ <strong>Fecha:</strong>{" "}
-              {new Date(evento.fecha).toLocaleString()}
-            </p>
+            <p>📍 {evento.lugar}</p>
+            <p>🗓️ {new Date(evento.fecha).toLocaleString()}</p>
           </div>
-          <div style={styles.descriptionBox}>
-            <h3>Acerca del evento</h3>
-            <p>{evento.descripcion}</p>
-          </div>
+          <p>{evento.descripcion}</p>
 
           {evento.latitud && evento.longitud && (
             <div style={styles.mapWrapper}>
-              <h3>Ubicación</h3>
               <MapContainer
                 center={[evento.latitud, evento.longitud]}
                 zoom={15}
@@ -146,38 +195,17 @@ function EventDetailPage() {
           )}
         </div>
 
-        {/* --- Columna Derecha: Tickets --- */}
         <div style={styles.ticketSection}>
-          <h2 style={styles.ticketTitle}>Selecciona tus Boletos</h2>
-
-          {mensajeCompra && (
-            <div
-              style={
-                mensajeCompra.type === "error"
-                  ? styles.msgError
-                  : styles.msgSuccess
-              }
-            >
-              {mensajeCompra.text}
-            </div>
-          )}
-
+          <h2>Boletos</h2>
           <div style={styles.ticketsList}>
             {evento.boletos
-              // 5. Filtro: Solo mostrar boletos activos
-              .filter((boleto) => boleto.activo === 1 || boleto.activo === true)
+              .filter((b) => b.activo)
               .map((boleto) => (
                 <div key={boleto.id} style={styles.ticketCard}>
                   <div style={styles.ticketInfo}>
                     <span style={styles.zoneName}>{boleto.zona}</span>
-                    <span style={styles.availability}>
-                      {boleto.disponibles > 0
-                        ? `${boleto.disponibles} disp.`
-                        : "AGOTADO"}
-                    </span>
+                    <span style={styles.price}>${boleto.precio}</span>
                   </div>
-                  <div style={styles.priceTag}>${boleto.precio.toFixed(2)}</div>
-
                   <div style={styles.buyActions}>
                     <input
                       type="number"
@@ -185,21 +213,15 @@ function EventDetailPage() {
                       max={boleto.disponibles}
                       value={cantidad}
                       onChange={(e) =>
-                        setCantidad(Math.max(1, parseInt(e.target.value) || 1))
+                        setCantidad(Math.max(1, parseInt(e.target.value)))
                       }
                       style={styles.qtyInput}
-                      disabled={boleto.disponibles <= 0}
                     />
                     <button
                       onClick={() => handleComprar(boleto.id)}
-                      disabled={boleto.disponibles <= 0}
-                      style={
-                        boleto.disponibles > 0
-                          ? styles.buyBtn
-                          : styles.soldOutBtn
-                      }
+                      style={styles.buyBtn}
                     >
-                      {boleto.disponibles > 0 ? "Comprar" : "Agotado"}
+                      Comprar
                     </button>
                   </div>
                 </div>
@@ -231,13 +253,11 @@ const styles = {
     textDecoration: "none",
     fontWeight: "bold",
   },
-
   layout: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
     gap: "40px",
   },
-
   eventInfo: {
     backgroundColor: "white",
     padding: "30px",
@@ -257,60 +277,32 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: "1.5rem",
-    color: "#888",
+    fontSize: "2rem",
   },
-
   title: { margin: "0 0 10px 0", fontSize: "2rem", color: "#111" },
-  meta: {
-    color: "#555",
-    fontSize: "1.1rem",
-    marginBottom: "20px",
-    lineHeight: "1.6",
-  },
-  descriptionBox: {
-    borderTop: "1px solid #eee",
-    paddingTop: "20px",
-    color: "#444",
-    lineHeight: "1.6",
-  },
-
+  meta: { color: "#555", fontSize: "1.1rem", marginBottom: "20px" },
   mapWrapper: {
     marginTop: "30px",
     borderRadius: "12px",
     overflow: "hidden",
     border: "1px solid #eee",
   },
-
   ticketSection: { display: "flex", flexDirection: "column", gap: "20px" },
-  ticketTitle: { fontSize: "1.5rem", margin: "0 0 10px 0" },
-  ticketsList: { display: "flex", flexDirection: "column", gap: "15px" },
-
   ticketCard: {
     backgroundColor: "white",
     border: "1px solid #e5e7eb",
     borderRadius: "12px",
     padding: "20px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "15px",
     boxShadow: "0 2px 5px rgba(0,0,0,0.02)",
   },
   ticketInfo: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
+    marginBottom: "10px",
+    fontWeight: "bold",
   },
-  zoneName: { fontWeight: "bold", fontSize: "1.2rem", color: "#333" },
-  availability: {
-    fontSize: "0.85rem",
-    color: "#666",
-    backgroundColor: "#f3f4f6",
-    padding: "4px 8px",
-    borderRadius: "4px",
-  },
-  priceTag: { fontSize: "1.5rem", fontWeight: "bold", color: "#2563EB" },
-
+  zoneName: { fontSize: "1.2rem" },
+  price: { color: "#2563EB", fontSize: "1.3rem" },
   buyActions: { display: "flex", gap: "10px" },
   qtyInput: {
     width: "60px",
@@ -328,29 +320,63 @@ const styles = {
     cursor: "pointer",
     fontWeight: "bold",
   },
-  soldOutBtn: {
-    flex: 1,
-    backgroundColor: "#ccc",
-    color: "#666",
-    border: "none",
+
+  // MODAL
+  modalOverlay: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    backgroundColor: "rgba(0,0,0,0.8)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 3000,
+  },
+  modalCard: {
+    backgroundColor: "white",
+    padding: "30px",
+    borderRadius: "16px",
+    textAlign: "center",
+    width: "90%",
+    maxWidth: "400px",
+  },
+  stepBox: {
+    margin: "20px 0",
+    padding: "15px",
+    backgroundColor: "#f9fafb",
+    borderRadius: "8px",
+    border: "1px solid #eee",
+  },
+  whatsappBtn: {
+    display: "block",
+    marginTop: "10px",
+    padding: "10px",
+    backgroundColor: "#25D366",
+    color: "white",
+    textDecoration: "none",
     borderRadius: "6px",
-    cursor: "not-allowed",
     fontWeight: "bold",
   },
-
-  msgSuccess: {
-    backgroundColor: "#d1fae5",
-    color: "#065f46",
-    padding: "15px",
-    borderRadius: "8px",
-    textAlign: "center",
+  primaryBtn: {
+    width: "100%",
+    marginTop: "10px",
+    padding: "10px",
+    backgroundColor: "#2563EB",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    fontWeight: "bold",
+    cursor: "pointer",
   },
-  msgError: {
-    backgroundColor: "#fee2e2",
-    color: "#991b1b",
-    padding: "15px",
-    borderRadius: "8px",
-    textAlign: "center",
+  closeLink: {
+    background: "none",
+    border: "none",
+    color: "#888",
+    marginTop: "10px",
+    cursor: "pointer",
+    textDecoration: "underline",
   },
 };
 

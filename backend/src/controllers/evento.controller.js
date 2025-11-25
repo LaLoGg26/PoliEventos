@@ -175,6 +175,19 @@ async function postValidarTicket(req, res) {
   }
 }
 
+async function postReenviarWhatsapp(req, res) {
+  const { compraId } = req.body;
+  try {
+    const resultado = await eventoService.reenviarWhatsappCompra(
+      compraId,
+      req.user.id
+    );
+    res.json(resultado);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+}
+
 module.exports = {
   getEventos,
   getEventoById,
@@ -185,5 +198,6 @@ module.exports = {
   updateEvento,
   getMisTickets,
   postReenviarCorreo,
-  postValidarTicket, // 👈 EXPORTAR
+  postValidarTicket,
+  postReenviarWhatsapp,
 };
